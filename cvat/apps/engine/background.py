@@ -69,6 +69,7 @@ LOCK_TTL = REQUEST_TIMEOUT - 5
 LOCK_ACQUIRE_TIMEOUT = LOCK_TTL - 5
 
 
+
 class DatasetExporter(AbstractExporter):
     SUPPORTED_TARGETS = {RequestTarget.PROJECT, RequestTarget.TASK, RequestTarget.JOB}
 
@@ -168,6 +169,8 @@ class DatasetExporter(AbstractExporter):
         return reverse(
             f"{self.target}-download-dataset", args=[self.db_instance.pk], request=self.request
         )
+    
+
 
 
 class BackupExporter(AbstractExporter):
@@ -569,3 +572,83 @@ class TaskCreator(AbstractRequestManager):
     def init_callback_with_params(self):
         self.callback = create_task
         self.callback_args = (self.db_instance.pk, self.db_data)
+
+def run_yolov7_inference_frame(job_id: int, frame: int):
+    import io
+    import requests
+    from PIL import Image
+    from django.conf import settings
+    from django.db import transaction
+
+    from cvat.apps.engine.frame_provider import JobFrameProvider
+    from cvat.apps.engine.models import Job, FrameQuality
+    from cvat.apps.engine.serializers import LabeledDataSerializer
+    from cvat.apps.dataset_manager.task import patch_job_data
+    from cvat.apps.engine.models import SourceType
+
+    db_job = Job.objects.select_related("segment__task__data").get(pk=job_id)
+    frame_provider = JobFrameProvider(db_job)
+
+    # 🔑 Convert task/global frame → job-relative frame
+    frame_number = frame
+    frame_data = frame_provider.get_frame(frame, quality=FrameQuality.ORIGINAL)
+    image_bytes = frame_data.data.getvalue()
+
+    image = Image.open(io.BytesIO(image_bytes))
+    width, height = image.size
+
+    response = requests.post(
+        f"{settings.YOLOV7_SERVICE['URL']}/infer",
+        files={"image": ("frame.jpg", image_bytes, frame_data.mime)},
+        timeout=settings.YOLOV7_SERVICE.get("TIMEOUT", 300),
+    )
+    response.raise_for_status()
+    detections = response.json()
+
+    print("Detections received:", detections)
+
+    # ✅ Correct label resolution
+    labels = db_job.get_labels()
+    label_by_index = {i: l.id for i, l in enumerate(labels)}
+
+    shapes = []
+    for det in detections:
+        label_id = label_by_index.get(det["class_id"])
+        if label_id is None:
+            continue
+
+        xc, yc, w, h = det["xc"], det["yc"], det["w"], det["h"]
+        x1, y1 = (xc - w / 2) * width, (yc - h / 2) * height
+        x2, y2 = (xc + w / 2) * width, (yc + h / 2) * height
+
+        shapes.append({
+            "type": "rectangle",
+            "label_id": label_id,
+            "frame": frame_number,                  # 🔑 FIX
+            "points": [x1, y1, x2, y2],
+            "occluded": False,
+            "outside": False,
+            "attributes": [],
+            "source": str(SourceType.AUTO),      # 🔑 FIX
+        })
+
+    if not shapes:
+        return
+    
+    print("Detected shapes:", shapes)
+
+    payload = {
+        "version": 0,
+        "tags": [],
+        "shapes": shapes,
+        "tracks": [],
+    }
+
+    serializer = LabeledDataSerializer(
+        data=payload,
+        context={"annotation_action": "create"},
+    )
+    serializer.is_valid(raise_exception=True)
+
+    with transaction.atomic():
+        patch_job_data(job_id, serializer.validated_data, action="create")

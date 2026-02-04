@@ -12,7 +12,7 @@ import {
 import GlobalHotKeys, { KeyMap } from 'utils/mousetrap-react';
 import { Canvas, CanvasMode } from 'cvat-canvas-wrapper';
 import { LabelType } from 'cvat-core-wrapper';
-
+import AutoAnnotateControl from './auto-annotate-control';
 import { ShortcutScope } from 'utils/enums';
 import { registerComponentShortcuts } from 'actions/shortcuts-actions';
 import { subKeyMap } from 'utils/component-subkeymap';
@@ -354,6 +354,7 @@ export default function ControlsSideBarComponent(props: Props): JSX.Element {
             <hr />
             <ObservedToolsControl />
             <ObservedOpenCVControl />
+            <AutoAnnotateControl />
             {
                 rectangleControlVisible && (
                     <ObservedDrawRectangleControl

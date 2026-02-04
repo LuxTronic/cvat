@@ -112,6 +112,7 @@ services:
       - cvat_data:/home/django/data
       - cvat_keys:/home/django/keys
       - cvat_logs:/home/django/logs
+      - ./models:/models
     networks:
       cvat:
         aliases:
@@ -133,6 +134,26 @@ services:
       - cvat_logs:/home/django/logs
     networks:
       - cvat
+
+  yolov7:
+    container_name: yolov7
+    build: ./yolov7
+    restart: always
+    runtime: nvidia
+    environment:
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+    volumes:
+      - ./models:/models
+      - ./yolov7:/yolov7
+    ports:
+      - "8000:8000"
+    networks:
+      - cvat
+
+
+
+      
 
   cvat_worker_import:
     container_name: cvat_worker_import

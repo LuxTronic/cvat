@@ -20,10 +20,12 @@ from rq.job import Dependency as RQDependency
 from rq.job import Job as RQJob
 from rq.registry import BaseRegistry as RQBaseRegistry
 
+
 from cvat.apps.engine.types import ExtendedRequest
 from cvat.apps.engine.utils import take_by
 from cvat.apps.redis_handler.apps import SELECTOR_TO_QUEUE
 from cvat.apps.redis_handler.rq import RequestId, RequestIdWithOptionalSubresource
+from cvat.apps.engine.models import RequestTarget
 
 if TYPE_CHECKING:
     from django.contrib.auth.models import User
@@ -372,6 +374,18 @@ class ExportRequestId(
     )
 
 
+
+class AutoAnnotateRequestId(RequestId):
+    ACTION_ALLOWED_VALUES = ("autoannotate",)
+    TARGET_ALLOWED_VALUES = (RequestTarget.JOB,)
+
+    QUEUE_SELECTORS = [
+        ("autoannotate", RequestTarget.JOB),
+    ]
+
+    def render(self) -> str:
+        return f"autoannotate:job-{self.target_id}"
+
 @attrs.frozen(kw_only=True, slots=False)
 class ImportRequestId(
     RequestIdWithOptionalSubresource,  # subresource is optional because import queue works also with task creation jobs
@@ -387,7 +401,6 @@ class ImportRequestId(
         r"(?P<action>import):(?P<target>(task|project|job))-(?P<target_id>\d+)-(?P<subresource>(annotations|dataset))",
         r"(?P<action>import):(?P<target>(task|project))-(?P<id>[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12})-(?P<subresource>backup)",
     )
-
 
 def define_dependent_job(
     queue: DjangoRQ,

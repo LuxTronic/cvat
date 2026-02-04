@@ -278,6 +278,7 @@ class CVAT_QUEUES(Enum):
     CONSENSUS = "consensus"
 
 
+
 redis_inmem_host = os.getenv("CVAT_REDIS_INMEM_HOST", "localhost")
 redis_inmem_port = os.getenv("CVAT_REDIS_INMEM_PORT", 6379)
 redis_inmem_password = os.getenv("CVAT_REDIS_INMEM_PASSWORD", "")
@@ -311,6 +312,7 @@ RQ_QUEUES = {
     CVAT_QUEUES.AUTO_ANNOTATION.value: {
         **REDIS_INMEM_SETTINGS,
         "DEFAULT_TIMEOUT": "24h",
+        "PARSED_JOB_ID_CLASS": "cvat.apps.engine.rq.AutoAnnotateRequestId",
     },
     CVAT_QUEUES.WEBHOOKS.value: {
         **REDIS_INMEM_SETTINGS,
@@ -361,6 +363,11 @@ RQ_EXCEPTION_HANDLERS = [
     "cvat.apps.engine.views.rq_exception_handler",
     "cvat.apps.events.handlers.handle_rq_exception",
 ]
+
+YOLOV7_SERVICE = {
+    "URL": os.getenv("CVAT_YOLOV7_SERVICE_URL", "http://host.docker.internal:8000"),
+    "TIMEOUT": int(os.getenv("CVAT_YOLOV7_SERVICE_TIMEOUT", 300)),
+}
 
 PERIODIC_RQ_JOBS = [
     {

@@ -20,7 +20,7 @@ __pycache__
 /temp*/
 
 # Ignore generated test files
-docker-compose.tests.yml
+docker-compose.tests.yml    
 
 # Ignore npm logs file
 npm-debug.log*
@@ -77,3 +77,7 @@ cvat-ui/dist
 **/!.yarn/releases
 **/!.yarn/sdks
 **/!.yarn/versions
+
+# Model files
+
+/models
