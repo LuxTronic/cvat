@@ -1912,10 +1912,15 @@ class JobViewSet(viewsets.GenericViewSet, mixins.ListModelMixin, mixins.CreateMo
 
         frame = int(frame)
 
+        task_id = db_job.segment.task.data.id
+        
         # Run inference synchronously
-        run_yolov7_inference_frame(db_job.id, frame)
+        run_yolov7_inference_frame(
+            job_id=db_job.id,
+            task_id=task_id,
+            frame=frame,
+        )
 
-        # No rq_id, no polling, no queue
         return Response(status=200)
 
 

@@ -22,11 +22,22 @@ def health():
 
 
 @app.post("/infer")
-async def infer(image: UploadFile = File(...)):
+async def infer(
+    image: UploadFile = File(...),
+    task_id: int = 0,
+):
     """
     Run YOLOv7 inference on a single image.
     Returns detections in YOLO normalized format.
-    """
+    """ 
+    weights_path = Path(f"/models/task_{task_id}/active/weights/best.pt")
+
+    if not weights_path.exists():
+        return JSONResponse(
+            status_code=400,
+            content={"error": f"No active model for task {task_id}"}
+    )
+
 
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir = Path(tmpdir)
@@ -41,12 +52,12 @@ async def infer(image: UploadFile = File(...)):
         # Run YOLOv7 detect.py
         cmd = [
             "python", "detect.py",
-            "--weights", WEIGHTS,
+            "--weights", str(weights_path),
             "--source", str(image_path),
             "--device", DEVICE,
             "--save-txt",
             "--save-conf",
-            "--conf", "0.25",
+            "--conf", "0.01",
             "--project", str(out_dir),
             "--name", "pred",
             "--exist-ok",

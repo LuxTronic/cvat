@@ -573,7 +573,7 @@ class TaskCreator(AbstractRequestManager):
         self.callback = create_task
         self.callback_args = (self.db_instance.pk, self.db_data)
 
-def run_yolov7_inference_frame(job_id: int, frame: int):
+def run_yolov7_inference_frame(job_id: int, task_id: int, frame: int):
     import io
     import requests
     from PIL import Image
@@ -599,6 +599,7 @@ def run_yolov7_inference_frame(job_id: int, frame: int):
 
     response = requests.post(
         f"{settings.YOLOV7_SERVICE['URL']}/infer",
+        params={"task_id": task_id}, 
         files={"image": ("frame.jpg", image_bytes, frame_data.mime)},
         timeout=settings.YOLOV7_SERVICE.get("TIMEOUT", 300),
     )
