@@ -8,13 +8,9 @@ def task_root(task_id: int) -> Path:
 def task_data_dir(task_id: int) -> Path:
     return task_root(task_id) / "data"
 
-def task_versions_dir(task_id: int) -> Path:
-    return task_root(task_id)
-
-def task_active_model(task_id: int) -> Path:
-    return task_root(task_id) / "active"
-
 def ensure_task_dirs(task_id: int):
-    root = task_root(task_id)
-    root.mkdir(parents=True, exist_ok=True)
-    task_data_dir(task_id).mkdir(exist_ok=True)
+    """
+    Ensure only the base directories.
+    Dataset structure is created by CVAT exporter.
+    """
+    task_data_dir(task_id).mkdir(parents=True, exist_ok=True)

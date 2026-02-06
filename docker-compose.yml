@@ -113,6 +113,7 @@ services:
       - cvat_keys:/home/django/keys
       - cvat_logs:/home/django/logs
       - ./models:/models
+
     networks:
       cvat:
         aliases:
@@ -132,6 +133,8 @@ services:
       - cvat_data:/home/django/data
       - cvat_keys:/home/django/keys
       - cvat_logs:/home/django/logs
+      - ./models:/models
+
     networks:
       - cvat
 
@@ -168,6 +171,9 @@ services:
       - cvat_data:/home/django/data
       - cvat_keys:/home/django/keys
       - cvat_logs:/home/django/logs
+      - ./models:/models
+      - ./yolov7:/yolov7 
+      
     networks:
       - cvat
 
@@ -186,7 +192,6 @@ services:
       - cvat_logs:/home/django/logs
     networks:
       - cvat
-
   cvat_worker_annotation:
     container_name: cvat_worker_annotation
     image: cvat/server:${CVAT_VERSION:-dev}
@@ -200,6 +205,8 @@ services:
       - cvat_data:/home/django/data
       - cvat_keys:/home/django/keys
       - cvat_logs:/home/django/logs
+      - ./models:/models
+
     networks:
       - cvat
 

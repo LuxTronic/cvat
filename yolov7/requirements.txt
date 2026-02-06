@@ -19,6 +19,7 @@ numpy
 Pillow
 PyYAML
 tqdm
+redis
 
 # Logging -------------------------------------
 tensorboard>=2.4.1

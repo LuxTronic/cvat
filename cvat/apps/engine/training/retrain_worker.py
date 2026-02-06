@@ -1,42 +1,43 @@
-import subprocess
-from pathlib import Path
+from .model_paths import ensure_task_dirs, task_data_dir
+from .exporter import export_task_to_yolo
+from .dataset import unpack_yolo_dataset
+from .dataset import ensure_data_yaml
+from cvat.apps.engine.models import Task
+from cvat.apps.engine.training.counters import reset
+import logging
+import requests
 from django.conf import settings
-from cvat.apps.engine.training.counters import reset_counter
 
-YOLO_ROOT = Path("/yolov7")
-MODELS_ROOT = Path("/models")
+log = logging.getLogger(__name__)
 
 def retrain_task_model(task_id: int):
-    task_root = MODELS_ROOT / f"task_{task_id}"
-    data_dir = task_root / "data"
+    log.info("[TRAINER] Starting retraining for task %s", task_id)
 
-    task_root.mkdir(parents=True, exist_ok=True)
+    ensure_task_dirs(task_id)
+    data_dir = task_data_dir(task_id)
 
-    versions = sorted(p for p in task_root.glob("v*") if p.is_dir())
-    next_version = f"v{len(versions) + 1}"
-    out_dir = task_root / next_version
+    # 1. Export ZIP
+    zip_path = export_task_to_yolo(task_id)
 
-    active = task_root / "active"
-    if active.exists():
-        weights = active / "weights" / "best.pt"
-    else:
-        weights = YOLO_ROOT / "yolov7.pt"
+    # 2. Unpack ZIP
+    unpack_yolo_dataset(zip_path, data_dir)
 
-    cmd = [
-        "python", "train.py",
-        "--img", "640",
-        "--batch", "16",
-        "--epochs", "10",
-        "--data", str(data_dir / "data.yaml"),
-        "--weights", str(weights),
-        "--project", str(task_root),
-        "--name", next_version,
-    ]
+    # 3. Generate data.yaml
+    task = Task.objects.get(id=task_id)
+    labels = (
+        task.project.label_set.all()
+        if task.project_id
+        else task.label_set.all()
+    )
+    class_names = [l.name for l in labels]
+    ensure_data_yaml(data_dir, class_names)
 
-    subprocess.check_call(cmd, cwd=YOLO_ROOT)
+    # 4. Trigger YOLO service
+    resp = requests.post(
+        f"{settings.YOLOV7_SERVICE['URL']}/train",
+        json={"task_id": task_id},
+        timeout=10,
+    )
+    resp.raise_for_status()
 
-    # promote atomically
-    active.unlink(missing_ok=True)
-    active.symlink_to(out_dir)
-
-    reset_counter(task_id)
+    log.info("[TRAINER] YOLO training triggered for task %s", task_id)
