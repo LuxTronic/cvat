@@ -8,7 +8,7 @@ import torch
 import json
 import logging
 
-app = FastAPI()
+app = FastAPI(debug=True)
 
 import os
 import redis

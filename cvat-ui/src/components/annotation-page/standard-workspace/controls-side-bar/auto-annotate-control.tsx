@@ -6,7 +6,10 @@ import message from 'antd/lib/message';
 import Typography from 'antd/lib/typography';
 import { getCore } from 'cvat-core-wrapper';
 import { CombinedState } from 'reducers';
-import { fetchAnnotationsAsync } from 'actions/annotation-actions';
+import {
+    fetchAnnotationsAsync,
+    changeFrameAsync,
+} from 'actions/annotation-actions';
 import CVATTooltip from 'components/common/cvat-tooltip';
 import withVisibilityHandling from './handle-popover-visibility';
 
@@ -17,15 +20,13 @@ interface Props {
     jobInstance: any;
     frame: number;
     frameIsDeleted: boolean;
-}
-
-interface DispatchToProps {
     fetchAnnotations: typeof fetchAnnotationsAsync;
+    changeFrame: typeof changeFrameAsync;
 }
 
 const CustomPopover = withVisibilityHandling(Popover, 'auto-annotate-control');
 
-function mapStateToProps(state: CombinedState): Props {
+function mapStateToProps(state: CombinedState): Omit<Props, 'fetchAnnotations' | 'changeFrame'> {
     const {
         annotation: {
             job: { instance: jobInstance },
@@ -38,15 +39,27 @@ function mapStateToProps(state: CombinedState): Props {
         },
     } = state;
 
-    return { jobInstance, frame, frameIsDeleted };
+    return {
+        jobInstance,
+        frame,
+        frameIsDeleted,
+    };
 }
 
-const mapDispatchToProps: DispatchToProps = {
+const mapDispatchToProps = {
     fetchAnnotations: fetchAnnotationsAsync,
+    changeFrame: changeFrameAsync,
 };
 
-function AutoAnnotateControlComponent(props: Props & DispatchToProps): JSX.Element {
-    const { jobInstance, frame, frameIsDeleted, fetchAnnotations } = props;
+function AutoAnnotateControlComponent(props: Props): JSX.Element {
+    const {
+        jobInstance,
+        frame,
+        frameIsDeleted,
+        fetchAnnotations,
+        changeFrame,
+    } = props;
+
     const [loading, setLoading] = useState(false);
 
     const handleAutoAnnotate = useCallback(async () => {
@@ -55,6 +68,7 @@ function AutoAnnotateControlComponent(props: Props & DispatchToProps): JSX.Eleme
         setLoading(true);
 
         try {
+            // 1️⃣ Run backend inference
             await core.server.request(
                 `/api/jobs/${jobInstance.id}/auto-annotate`,
                 {
@@ -63,16 +77,34 @@ function AutoAnnotateControlComponent(props: Props & DispatchToProps): JSX.Eleme
                 },
             );
 
-            message.success('Inference completed successfully');
+            /**
+             * 2️⃣ FORCE CANVAS REDRAW
+             * This is the ONLY correct refresh mechanism in CVAT 4.2.x
+             * - fetches annotations internally
+             * - updates Redux player state
+             * - redraws canvas immediately
+             */
+            await jobInstance.annotations.clear({ reload: true });
+            changeFrame(frame, false, undefined, true);
 
-            // 🔑 This updates Redux → canvas redraws
-            fetchAnnotations();
+            message.success('Inference completed successfully');
         } catch (error: any) {
-            message.error(error?.message || 'Inference failed');
+            message.error(
+                error?.response?.data?.detail ||
+                error?.response?.data?.error ||
+                error?.message ||
+                'Inference failed',
+            );
         } finally {
             setLoading(false);
         }
-    }, [jobInstance, frame, frameIsDeleted, loading, fetchAnnotations]);
+    }, [
+        jobInstance.id,
+        frame,
+        frameIsDeleted,
+        loading,
+        changeFrame,
+    ]);
 
     const content = (
         <div style={{ textAlign: 'center', minWidth: 200 }}>

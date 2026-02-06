@@ -16,6 +16,7 @@ from rest_framework import serializers
 from rest_framework.exceptions import MethodNotAllowed
 from rest_framework.reverse import reverse
 
+
 import cvat.apps.dataset_manager as dm
 from cvat.apps.dataset_manager.formats.registry import EXPORT_FORMATS
 from cvat.apps.dataset_manager.util import TmpDirManager
@@ -635,26 +636,33 @@ def run_yolov7_inference_frame(job_id: int, task_id: int, frame: int):
 
     response = requests.post(
         yolo_url,
-        params={"task_id": task_id},  # 🔑 tells YOLO which model to use
+        params={"task_id": task_id}, 
         files={"image": ("frame.jpg", image_bytes, frame_data.mime)},
         timeout=settings.YOLOV7_SERVICE.get("TIMEOUT", 300),
     )
 
-    response.raise_for_status()
+
+    if not response.ok:
+        log.error(
+            "[AUTO-ANNOTATE] YOLO inference failed | status=%s body=%s",
+            response.status_code,
+            response.text,
+        )
+
+        # Make sure body is valid JSON
+        try:
+            detail = response.json()
+        except Exception:
+            detail = {"error": response.text}
+
+        raise serializers.ValidationError(detail)
+
     detections = response.json()
 
     log.info(
         "[AUTO-ANNOTATE] YOLO response | detections=%d",
         len(detections),
     )
-
-    if not detections:
-        log.info(
-            "[AUTO-ANNOTATE] No detections returned | job_id=%s frame=%s",
-            job_id,
-            frame_number,
-        )
-        return
 
     # ------------------------------------------------------------------
     # Resolve labels
