@@ -575,21 +575,38 @@ class TaskCreator(AbstractRequestManager):
 
 def run_yolov7_inference_frame(job_id: int, task_id: int, frame: int):
     import io
+    import logging
     import requests
     from PIL import Image
     from django.conf import settings
     from django.db import transaction
 
     from cvat.apps.engine.frame_provider import JobFrameProvider
-    from cvat.apps.engine.models import Job, FrameQuality
+    from cvat.apps.engine.models import Job, FrameQuality, SourceType
     from cvat.apps.engine.serializers import LabeledDataSerializer
     from cvat.apps.dataset_manager.task import patch_job_data
-    from cvat.apps.engine.models import SourceType
 
+    log = logging.getLogger(__name__)
+
+    log.info(
+        "[AUTO-ANNOTATE] Starting inference | job_id=%s task_id=%s frame=%s",
+        job_id,
+        task_id,
+        frame,
+    )
+
+    # ------------------------------------------------------------------
+    # Load job + frame
+    # ------------------------------------------------------------------
     db_job = Job.objects.select_related("segment__task__data").get(pk=job_id)
     frame_provider = JobFrameProvider(db_job)
 
-    # 🔑 Convert task/global frame → job-relative frame
+    log.debug(
+        "[AUTO-ANNOTATE] Job loaded | job_id=%s task=%s",
+        job_id,
+        db_job.segment.task_id,
+    )
+
     frame_number = frame
     frame_data = frame_provider.get_frame(frame, quality=FrameQuality.ORIGINAL)
     image_bytes = frame_data.data.getvalue()
@@ -597,25 +614,70 @@ def run_yolov7_inference_frame(job_id: int, task_id: int, frame: int):
     image = Image.open(io.BytesIO(image_bytes))
     width, height = image.size
 
+    log.debug(
+        "[AUTO-ANNOTATE] Frame extracted | frame=%s size=%sx%s bytes=%s",
+        frame_number,
+        width,
+        height,
+        len(image_bytes),
+    )
+
+    # ------------------------------------------------------------------
+    # Call YOLOv7 service
+    # ------------------------------------------------------------------
+    yolo_url = f"{settings.YOLOV7_SERVICE['URL']}/infer"
+
+    log.info(
+        "[AUTO-ANNOTATE] Calling YOLO service | url=%s task_id=%s",
+        yolo_url,
+        task_id,
+    )
+
     response = requests.post(
-        f"{settings.YOLOV7_SERVICE['URL']}/infer",
-        params={"task_id": task_id}, 
+        yolo_url,
+        params={"task_id": task_id},  # 🔑 tells YOLO which model to use
         files={"image": ("frame.jpg", image_bytes, frame_data.mime)},
         timeout=settings.YOLOV7_SERVICE.get("TIMEOUT", 300),
     )
+
     response.raise_for_status()
     detections = response.json()
 
-    print("Detections received:", detections)
+    log.info(
+        "[AUTO-ANNOTATE] YOLO response | detections=%d",
+        len(detections),
+    )
 
-    # ✅ Correct label resolution
+    if not detections:
+        log.info(
+            "[AUTO-ANNOTATE] No detections returned | job_id=%s frame=%s",
+            job_id,
+            frame_number,
+        )
+        return
+
+    # ------------------------------------------------------------------
+    # Resolve labels
+    # ------------------------------------------------------------------
     labels = db_job.get_labels()
     label_by_index = {i: l.id for i, l in enumerate(labels)}
 
+    log.debug(
+        "[AUTO-ANNOTATE] Label mapping | %s",
+        label_by_index,
+    )
+
+    # ------------------------------------------------------------------
+    # Build shapes
+    # ------------------------------------------------------------------
     shapes = []
     for det in detections:
         label_id = label_by_index.get(det["class_id"])
         if label_id is None:
+            log.warning(
+                "[AUTO-ANNOTATE] Skipping detection with unknown class_id=%s",
+                det["class_id"],
+            )
             continue
 
         xc, yc, w, h = det["xc"], det["yc"], det["w"], det["h"]
@@ -625,19 +687,32 @@ def run_yolov7_inference_frame(job_id: int, task_id: int, frame: int):
         shapes.append({
             "type": "rectangle",
             "label_id": label_id,
-            "frame": frame_number,                  # 🔑 FIX
+            "frame": frame_number,
             "points": [x1, y1, x2, y2],
             "occluded": False,
             "outside": False,
             "attributes": [],
-            "source": str(SourceType.AUTO),      # 🔑 FIX
+            "source": str(SourceType.AUTO),
         })
 
-    if not shapes:
-        return
-    
-    print("Detected shapes:", shapes)
+    log.info(
+        "[AUTO-ANNOTATE] Shapes created | count=%d job_id=%s frame=%s",
+        len(shapes),
+        job_id,
+        frame_number,
+    )
 
+    if not shapes:
+        log.info(
+            "[AUTO-ANNOTATE] No valid shapes after filtering | job_id=%s frame=%s",
+            job_id,
+            frame_number,
+        )
+        return
+
+    # ------------------------------------------------------------------
+    # Save annotations
+    # ------------------------------------------------------------------
     payload = {
         "version": 0,
         "tags": [],
@@ -653,3 +728,10 @@ def run_yolov7_inference_frame(job_id: int, task_id: int, frame: int):
 
     with transaction.atomic():
         patch_job_data(job_id, serializer.validated_data, action="create")
+
+    log.info(
+        "[AUTO-ANNOTATE] Annotations saved | job_id=%s frame=%s shapes=%d",
+        job_id,
+        frame_number,
+        len(shapes),
+    )

@@ -32,7 +32,30 @@ def _run_training(cmd, task_id: int):
 
         log.info("[YOLO] Training completed for task %s", task_id)
 
-        # ✅ SUCCESS → reset counter + release lock
+        task_dir = MODELS_ROOT / f"task_{task_id}"
+
+        # find latest v*
+        versions = sorted(
+            [p for p in task_dir.glob("v*") if p.is_dir()],
+            key=lambda p: p.name,
+        )
+        if not versions:
+            raise RuntimeError(f"No trained versions found for task {task_id}")
+
+        latest = versions[-1]
+        active = task_dir / "active"
+
+        if active.exists() or active.is_symlink():
+            active.unlink()
+
+        active.symlink_to(latest)
+
+        log.info(
+            "[YOLO] Activated model for task %s → %s",
+            task_id,
+            latest,
+        )
+
         r.delete(f"task:{task_id}:frames")
         r.delete(f"task:{task_id}:training")
 
@@ -44,9 +67,11 @@ def _run_training(cmd, task_id: int):
     except Exception:
         log.exception("[YOLO] Training FAILED for task %s", task_id)
 
+        # ⚠️ release lock so retry is possible
         r.delete(f"task:{task_id}:training")
 
         raise
+
 
 DEVICE = "0" if torch.cuda.is_available() else  "cpu"
 YOLO_ROOT = Path("/yolov7")
@@ -73,6 +98,11 @@ async def infer(
     Returns detections in YOLO normalized format.
     """ 
     weights_path = Path(f"/models/task_{task_id}/active/weights/best.pt")
+    log.info(
+        "[YOLO-INFER] Using weights: %s",
+        weights_path,
+    )
+
 
     if not weights_path.exists():
         return JSONResponse(
@@ -97,17 +127,32 @@ async def infer(
             "--weights", str(weights_path),
             "--source", str(image_path),
             "--device", DEVICE,
-            "--workers", "0",        
             "--save-txt",
             "--save-conf",
-            "--conf", "0.01",
+            "--conf", "0.02",
             "--project", str(out_dir),
             "--name", "pred",
             "--exist-ok",
             "--nosave"
         ]
 
-        subprocess.run(cmd, check=True)
+        proc = subprocess.run(
+            cmd,
+            cwd=YOLO_ROOT,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+
+        log.info("[YOLO-INFER] stdout:\n%s", proc.stdout)
+        log.error("[YOLO-INFER] stderr:\n%s", proc.stderr)
+
+        if proc.returncode != 0:
+            raise RuntimeError(
+                f"YOLO detect.py failed with code {proc.returncode}\n"
+                f"STDERR:\n{proc.stderr}"
+            )
+
 
         # Parse YOLO output
         labels_dir = out_dir / "pred" / "labels"
@@ -160,6 +205,7 @@ def train_task(payload: dict):
         args=(cmd, task_id),
         daemon=True,
     ).start()
+
 
     return {
         "status": "started",
