@@ -28,7 +28,7 @@ COPY . .
 RUN mkdir -p /yolov7/weights && \
     if [ ! -f /yolov7/weights/yolov7.pt ]; then \
         echo "[YOLO] Downloading yolov7.pt weights..." && \
-        wget -q https://github.com/WongKinYiu/yolov7/releases/download/v0.1/yolov7.pt \
+        wget -q https://github.com/WongKinYiu/yolov7/releases/download/v0.1/yolov7-tiny.pt \
             -O /yolov7/weights/yolov7.pt ; \
     else \
         echo "[YOLO] yolov7.pt already present, skipping download"; \

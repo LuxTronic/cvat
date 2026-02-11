@@ -12,6 +12,7 @@ from PIL import Image
 
 from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import JSONResponse
+from utils.datasets import letterbox
 
 from models.experimental import attempt_load
 from utils.general import non_max_suppression, scale_coords
@@ -68,8 +69,15 @@ def get_model_for_task(task_id: int) -> torch.nn.Module:
         if not weights_path.exists():
             raise RuntimeError(f"No active model for task {task_id}: {weights_path} does not exist")
 
-        log.info("[YOLO] Loading model for task %s from %s", task_id, weights_path)
-
+        version_dir = weights_path.parents[2].name  # e.g. v3
+        log.info(
+            "[YOLO] Loading model | task=%s | version=%s | weights=%s | device=%s | half=%s",
+            task_id,
+            version_dir,
+            weights_path,
+            DEVICE,
+            USE_HALF,
+        )
         model = attempt_load(str(weights_path), map_location=DEVICE)
         model.eval()
 
@@ -139,31 +147,93 @@ def health():
 @app.post("/infer")
 async def infer(image: UploadFile = File(...), task_id: int = 0):
     try:
+        # ----------------------------
+        # Load model (cached per task)
+        # ----------------------------
         model = get_model_for_task(task_id)
         infer_lock = _get_infer_lock(task_id)
 
-        # Load image from request (no disk)
+        weights_path = MODELS_ROOT / f"task_{task_id}" / "active" / "weights" / "best.pt"
+        version = weights_path.parents[2].name  # e.g. v3
+        stride = int(model.stride.max())
+
+        # ----------------------------
+        # Logging: model + request
+        # ----------------------------
+        log.info(
+            "[YOLO-INFER] task=%s | version=%s | weights=%s | stride=%d | half=%s",
+            task_id,
+            version,
+            weights_path,
+            stride,
+            USE_HALF,
+        )
+
+        log.info(
+            "[YOLO-INFER] request | filename=%s | content_type=%s",
+            image.filename,
+            image.content_type,
+        )
+
+        # ----------------------------
+        # Load image
+        # ----------------------------
         img = Image.open(image.file).convert("RGB")
         img0 = np.array(img)  # original HWC RGB
         h0, w0 = img0.shape[:2]
 
-        # YOLOv7 expects 640x640 by default (unless you trained different)
-        img_resized = img.resize((640, 640))
-        img_np = np.array(img_resized)
+        # ----------------------------
+        # Inference image size (MATCH TRAINING)
+        # ----------------------------
+        TRAIN_IMG_SIZE = 512  # must match --img-size used in training
+        IMG_SIZE = int(np.ceil(TRAIN_IMG_SIZE / stride) * stride)
 
-        img_tensor = torch.from_numpy(img_np).to(DEVICE)
-        img_tensor = img_tensor.permute(2, 0, 1).contiguous()  # HWC -> CHW
+        log.info(
+            "[YOLO-INFER] image | original=%dx%d | resized=%dx%d",
+            w0,
+            h0,
+            IMG_SIZE,
+            IMG_SIZE,
+        )
+
+        # ----------------------------
+        # Resize (simple resize; letterbox optional)
+        # ----------------------------
+        # ----------------------------
+        # Letterbox resize (YOLO-correct)
+        # ----------------------------
+        img_lb, ratio, pad = letterbox(
+            img0,
+            new_shape=IMG_SIZE,
+            auto=False,
+            scaleFill=False,
+        )
+
+        img_tensor = torch.from_numpy(img_lb).to(DEVICE)
+        img_tensor = img_tensor.permute(2, 0, 1).contiguous()
         img_tensor = img_tensor.float() / 255.0
-        img_tensor = img_tensor.unsqueeze(0)  # add batch
+        img_tensor = img_tensor.unsqueeze(0)
 
+        
+        # 🔥 CRITICAL: match model dtype
         if USE_HALF:
             img_tensor = img_tensor.half()
 
+        # ----------------------------
+        # Inference
+        # ----------------------------
         with infer_lock:
             with torch.no_grad():
                 pred = model(img_tensor)[0]
-                pred = non_max_suppression(pred, conf_thres=0.02, iou_thres=0.10)
+                pred = non_max_suppression(
+                    pred,
+                    conf_thres=0.02,
+                    iou_thres=0.10,
+                )
 
+        # ----------------------------
+        # Post-processing
+        # ----------------------------
         detections = []
 
         for det in pred:
@@ -171,7 +241,16 @@ async def infer(image: UploadFile = File(...), task_id: int = 0):
                 continue
 
             # scale boxes back to original image size
-            det[:, :4] = scale_coords(img_tensor.shape[2:], det[:, :4], img0.shape).round()
+            det[:, :4] = scale_coords(
+                img_lb.shape[:2], det[:, :4], img0.shape
+            ).round()
+            log.info(
+                "[YOLO-INFER] letterbox | ratio=%.4f | pad=(%d,%d)",
+                ratio[0],
+                pad[0],
+                pad[1],
+            )
+
 
             for *xyxy, conf, cls in det:
                 x1, y1, x2, y2 = map(float, xyxy)
@@ -185,12 +264,17 @@ async def infer(image: UploadFile = File(...), task_id: int = 0):
                     "h": (y2 - y1) / h0,
                 })
 
+        log.info(
+            "[YOLO-INFER] result | task=%s | detections=%d",
+            task_id,
+            len(detections),
+        )
+
         return JSONResponse(content=detections)
 
     except Exception as e:
         log.exception("[YOLO-INFER] Failed")
         return JSONResponse(status_code=500, content={"error": str(e)})
-
 
 @app.post("/train")
 def train_task(payload: dict):
@@ -201,14 +285,21 @@ def train_task(payload: dict):
 
     cmd = [
         "python", "train.py",
-        "--img", "640",
-        "--batch", "8",
+        "--weights", "/yolov7/weights/yolov7.pt",
+        "--img-size", "512",
+        "--batch-size", "32",
         "--epochs", "30",
         "--data", str(data_yaml),
-        "--weights", "/yolov7/weights/yolov7.pt",
+        "--freeze", "10",
+        "--rect",              
+        "--hyp", "/yolov7/data/hyp.scratch.tiny.yaml",
+        "--workers", "0",
+        "--notest",
         "--project", str(task_dir),
         "--name", f"v{len(list(task_dir.glob('v*'))) + 1}",
     ]
+
+
 
     threading.Thread(target=_run_training, args=(cmd, task_id), daemon=True).start()
 

@@ -1,6 +1,6 @@
 from .model_paths import ensure_task_dirs, task_data_dir
 from .exporter import export_task_to_yolo
-from .dataset import unpack_yolo_dataset
+from .dataset import clear_yolo_cache, split_train_val, unpack_yolo_dataset, clean_orphan_labels
 from .dataset import ensure_data_yaml
 from cvat.apps.engine.models import Task
 from cvat.apps.engine.training.counters import reset
@@ -21,6 +21,15 @@ def retrain_task_model(task_id: int):
 
     # 2. Unpack ZIP
     unpack_yolo_dataset(zip_path, data_dir)
+
+    split_train_val(data_dir, val_ratio=0.2)
+    log.info("[TRAINER] Splitting train/val for task %s", task_id)
+
+    clean_orphan_labels(data_dir)
+    log.info("[TRAINER] Cleaned orphan labels for task %s", task_id)
+
+    clear_yolo_cache(data_dir)
+    log.info("[TRAINER] Cleared YOLO cache for task %s", task_id)
 
     # 3. Generate data.yaml
     task = Task.objects.get(id=task_id)
