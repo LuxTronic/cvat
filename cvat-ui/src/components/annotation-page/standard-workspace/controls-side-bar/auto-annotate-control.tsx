@@ -55,6 +55,10 @@ function AutoAnnotateControlComponent(): JSX.Element {
         setLoading(true);
 
         try {
+            if (jobInstance.annotations.hasUnsavedChanges()) {
+                await jobInstance.annotations.save();
+            }
+
             await core.server.request(
                 `/api/jobs/${jobInstance.id}/auto-annotate`,
                 {
