@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { connect } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import Button from 'antd/lib/button';
 import Popover from 'antd/lib/popover';
 import message from 'antd/lib/message';
@@ -7,60 +7,46 @@ import { RobotOutlined } from '@ant-design/icons';
 import Typography from 'antd/lib/typography';
 import { getCore } from 'cvat-core-wrapper';
 import { CombinedState } from 'reducers';
+import GlobalHotKeys from 'utils/mousetrap-react';
 import {
-    fetchAnnotationsAsync,
     changeFrameAsync,
 } from 'actions/annotation-actions';
+import { registerComponentShortcuts } from 'actions/shortcuts-actions';
+import { ShortcutScope } from 'utils/enums';
+import { subKeyMap } from 'utils/component-subkeymap';
 import CVATTooltip from 'components/common/cvat-tooltip';
 import withVisibilityHandling from './handle-popover-visibility';
 
 const { Text } = Typography;
 const core = getCore();
 
-interface Props {
-    jobInstance: any;
-    frame: number;
-    frameIsDeleted: boolean;
-    fetchAnnotations: typeof fetchAnnotationsAsync;
-    changeFrame: typeof changeFrameAsync;
-}
-
-const CustomPopover = withVisibilityHandling(Popover, 'auto-annotate-control');
-
-function mapStateToProps(state: CombinedState): Omit<Props, 'fetchAnnotations' | 'changeFrame'> {
-    const {
-        annotation: {
-            job: { instance: jobInstance },
-            player: {
-                frame: {
-                    number: frame,
-                    data: { deleted: frameIsDeleted },
-                },
-            },
-        },
-    } = state;
-
-    return {
-        jobInstance,
-        frame,
-        frameIsDeleted,
-    };
-}
-
-const mapDispatchToProps = {
-    fetchAnnotations: fetchAnnotationsAsync,
-    changeFrame: changeFrameAsync,
+const componentShortcuts = {
+    SWITCH_AUTO_ANNOTATE_STANDARD_CONTROLS: {
+        name: 'Auto annotate frame',
+        description: 'Run automatic annotation for the current frame',
+        sequences: ['q'],
+        scope: ShortcutScope.STANDARD_WORKSPACE_CONTROLS,
+    },
 };
 
-function AutoAnnotateControlComponent(props: Props): JSX.Element {
+registerComponentShortcuts(componentShortcuts);
+
+const CustomPopover = withVisibilityHandling(Popover, 'auto-annotate-control');
+function AutoAnnotateControlComponent(): JSX.Element {
+    const dispatch = useDispatch<any>();
     const {
         jobInstance,
         frame,
         frameIsDeleted,
-        fetchAnnotations,
-        changeFrame,
-    } = props;
-
+        keyMap,
+        normalizedKeyMap,
+    } = useSelector((state: CombinedState) => ({
+        jobInstance: state.annotation.job.instance,
+        frame: state.annotation.player.frame.number,
+        frameIsDeleted: state.annotation.player.frame.data.deleted,
+        keyMap: state.shortcuts.keyMap,
+        normalizedKeyMap: state.shortcuts.normalizedKeyMap,
+    }));
     const [loading, setLoading] = useState(false);
 
     const handleAutoAnnotate = useCallback(async () => {
@@ -69,7 +55,6 @@ function AutoAnnotateControlComponent(props: Props): JSX.Element {
         setLoading(true);
 
         try {
-            // 1️⃣ Run backend inference
             await core.server.request(
                 `/api/jobs/${jobInstance.id}/auto-annotate`,
                 {
@@ -78,15 +63,8 @@ function AutoAnnotateControlComponent(props: Props): JSX.Element {
                 },
             );
 
-            /**
-             * 2️⃣ FORCE CANVAS REDRAW
-             * This is the ONLY correct refresh mechanism in CVAT 4.2.x
-             * - fetches annotations internally
-             * - updates Redux player state
-             * - redraws canvas immediately
-             */
             await jobInstance.annotations.clear({ reload: true });
-            changeFrame(frame, false, undefined, true);
+            dispatch(changeFrameAsync(frame, false, undefined, true));
 
             message.success('Inference completed successfully');
         } catch (error: any) {
@@ -104,8 +82,16 @@ function AutoAnnotateControlComponent(props: Props): JSX.Element {
         frame,
         frameIsDeleted,
         loading,
-        changeFrame,
+        dispatch,
+        jobInstance,
     ]);
+
+    const handlers: Record<keyof typeof componentShortcuts, (event?: KeyboardEvent) => void> = {
+        SWITCH_AUTO_ANNOTATE_STANDARD_CONTROLS: (event: KeyboardEvent | undefined) => {
+            if (event) event.preventDefault();
+            void handleAutoAnnotate();
+        },
+    };
 
     const content = (
         <div style={{ textAlign: 'center', minWidth: 200 }}>
@@ -123,21 +109,23 @@ function AutoAnnotateControlComponent(props: Props): JSX.Element {
     );
 
     return (
-        <CVATTooltip overlay="Generate inference using YOLOv7" placement="right">
-            <CustomPopover placement="right" content={content} trigger="click">
-                <Button
-                    className="cvat-auto-annotate-control cvat-canvas-control"
-                    type="link"
-                    disabled={frameIsDeleted}
-                >
-                    <RobotOutlined />
-                </Button>
-            </CustomPopover>
-        </CVATTooltip>
+        <>
+            <GlobalHotKeys keyMap={subKeyMap(componentShortcuts, keyMap)} handlers={handlers} />
+            <CVATTooltip
+                title={`Generate inference using YOLOv7 ${normalizedKeyMap.SWITCH_AUTO_ANNOTATE_STANDARD_CONTROLS}`}
+                placement='right'
+            >
+                <CustomPopover placement='right' content={content} trigger='click'>
+                    <Button
+                        className="cvat-auto-annotate-control cvat-canvas-control"
+                        type="link"
+                        disabled={frameIsDeleted}>
+                        <RobotOutlined />
+                    </Button>
+                </CustomPopover>
+            </CVATTooltip>
+        </>
     );
 }
 
-export default connect(
-    mapStateToProps,
-    mapDispatchToProps,
-)(React.memo(AutoAnnotateControlComponent));
+export default React.memo(AutoAnnotateControlComponent);
