@@ -7,13 +7,19 @@ import logging
 
 log = logging.getLogger(__name__)
 def ensure_data_yaml(dataset_dir: Path, class_names: list[str]):
+    """
+    Write a minimal YOLOv7-compatible data.yaml
+    EXACTLY matching:
+      train: /models/task_X/data/images
+      val:   /models/task_X/data/images
+    """
     data_yaml = dataset_dir / "data.yaml"
 
     content = {
-        "train": str(dataset_dir / "images" / "train"),
-        "val": str(dataset_dir / "images" / "val"),
+        "train": str(dataset_dir / "images"),
+        "val": str(dataset_dir / "images"),
         "nc": len(class_names),
-        "names": class_names,
+        "names": {i: name for i, name in enumerate(class_names)},
     }
 
     log.info("[DATASET] Writing YOLO data.yaml → %s", data_yaml)

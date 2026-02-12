@@ -3,6 +3,7 @@ import { connect } from 'react-redux';
 import Button from 'antd/lib/button';
 import Popover from 'antd/lib/popover';
 import message from 'antd/lib/message';
+import { RobotOutlined } from '@ant-design/icons';
 import Typography from 'antd/lib/typography';
 import { getCore } from 'cvat-core-wrapper';
 import { CombinedState } from 'reducers';
@@ -129,7 +130,7 @@ function AutoAnnotateControlComponent(props: Props): JSX.Element {
                     type="link"
                     disabled={frameIsDeleted}
                 >
-                    🤖
+                    <RobotOutlined />
                 </Button>
             </CustomPopover>
         </CVATTooltip>

@@ -214,8 +214,7 @@ async def infer(image: UploadFile = File(...), task_id: int = 0):
         img_tensor = img_tensor.float() / 255.0
         img_tensor = img_tensor.unsqueeze(0)
 
-        
-        # 🔥 CRITICAL: match model dtype
+
         if USE_HALF:
             img_tensor = img_tensor.half()
 
@@ -287,13 +286,13 @@ def train_task(payload: dict):
         "python", "train.py",
         "--weights", "/yolov7/weights/yolov7.pt",
         "--img-size", "512",
-        "--batch-size", "32",
-        "--epochs", "30",
+        "--batch-size", "8",
+        "--epochs", "200",
         "--data", str(data_yaml),
         "--freeze", "10",
-        "--rect",              
+        "--rect",
         "--hyp", "/yolov7/data/hyp.scratch.tiny.yaml",
-        "--workers", "0",
+        "--workers", "8",
         "--notest",
         "--project", str(task_dir),
         "--name", f"v{len(list(task_dir.glob('v*'))) + 1}",
