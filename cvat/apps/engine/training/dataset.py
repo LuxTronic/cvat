@@ -51,6 +51,30 @@ def unpack_yolo_dataset(zip_path: Path, data_dir: Path):
 
     log.info("[DATASET] YOLO dataset ready: %s", data_dir)
 
+def remove_unlabeled_images(data_dir: Path):
+    """
+    Remove any images in images/train that do NOT have a matching label file.
+    This prevents background-only bias.
+    """
+
+    images_train = data_dir / "images" / "train"
+    labels_train = data_dir / "labels" / "train"
+
+    removed = 0
+
+    for img_path in images_train.iterdir():
+        if img_path.suffix.lower() not in {".jpg", ".jpeg", ".png"}:
+            continue
+
+        label_path = labels_train / f"{img_path.stem}.txt"
+        if not label_path.exists():
+            log.info("[DATASET] Removing unlabeled image %s", img_path.name)
+            img_path.unlink()
+            removed += 1
+
+    log.info("[DATASET] Removed %d unlabeled images", removed)
+
+
 import random
 import shutil
 from pathlib import Path
@@ -109,16 +133,6 @@ def split_train_val(
         skipped,
     )
 
-
-def clean_orphan_labels(data_dir):
-    img_dir = data_dir / "images" / "train"
-    lbl_dir = data_dir / "labels" / "train"
-
-    for lbl in lbl_dir.glob("*.txt"):
-        img = img_dir / (lbl.stem + ".png")
-        if not img.exists():
-            log.warning("[DATASET] Removing orphan label %s", lbl.name)
-            lbl.unlink()
 
 def clear_yolo_cache(data_dir):
     cache_dir = data_dir / "labels"

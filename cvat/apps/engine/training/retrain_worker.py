@@ -1,6 +1,6 @@
 from .model_paths import ensure_task_dirs, task_data_dir
 from .exporter import export_task_to_yolo
-from .dataset import clear_yolo_cache, unpack_yolo_dataset, clean_orphan_labels
+from .dataset import clear_yolo_cache, unpack_yolo_dataset, remove_unlabeled_images
 from .dataset import ensure_data_yaml
 from cvat.apps.engine.models import Task
 from cvat.apps.engine.training.counters import reset
@@ -21,7 +21,7 @@ def retrain_task_model(task_id: int):
 
     # 2. Unpack ZIP
     unpack_yolo_dataset(zip_path, data_dir)
-
+    remove_unlabeled_images(data_dir)
     clear_yolo_cache(data_dir)
     log.info("[TRAINER] Cleared YOLO cache for task %s", task_id)
 
