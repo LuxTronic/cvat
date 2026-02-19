@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import Button from 'antd/lib/button';
 import Popover from 'antd/lib/popover';
+import Input from 'antd/lib/input';
 import message from 'antd/lib/message';
 import { RobotOutlined } from '@ant-design/icons';
 import Typography from 'antd/lib/typography';
@@ -18,6 +19,7 @@ import CVATTooltip from 'components/common/cvat-tooltip';
 import withVisibilityHandling from './handle-popover-visibility';
 
 const { Text } = Typography;
+const { TextArea } = Input;
 const core = getCore();
 
 const componentShortcuts = {
@@ -48,6 +50,31 @@ function AutoAnnotateControlComponent(): JSX.Element {
         normalizedKeyMap: state.shortcuts.normalizedKeyMap,
     }));
     const [loading, setLoading] = useState(false);
+    const [openAIPrompt, setOpenAIPrompt] = useState('');
+    const [contextFrameText, setContextFrameText] = useState('');
+
+    const parseContextFrame = useCallback((): number[] | null => {
+        const trimmed = contextFrameText.trim();
+        if (!trimmed.length) {
+            return [];
+        }
+
+        const parsed = Number(trimmed);
+        if (!Number.isInteger(parsed) || parsed < 0) {
+            return null;
+        }
+
+        if (parsed === frame) {
+            return null;
+        }
+
+        return [parsed];
+    }, [contextFrameText, frame]);
+
+    const reloadAnnotations = useCallback(async () => {
+        await jobInstance.annotations.clear({ reload: true });
+        dispatch(changeFrameAsync(frame, false, undefined, true));
+    }, [dispatch, frame, jobInstance]);
 
     const handleAutoAnnotate = useCallback(async () => {
         if (loading || frameIsDeleted) return;
@@ -67,9 +94,7 @@ function AutoAnnotateControlComponent(): JSX.Element {
                 },
             );
 
-            await jobInstance.annotations.clear({ reload: true });
-            dispatch(changeFrameAsync(frame, false, undefined, true));
-
+            await reloadAnnotations();
             message.success('Inference completed successfully');
         } catch (error: any) {
             message.error(
@@ -82,12 +107,83 @@ function AutoAnnotateControlComponent(): JSX.Element {
             setLoading(false);
         }
     }, [
-        jobInstance.id,
         frame,
         frameIsDeleted,
-        loading,
-        dispatch,
         jobInstance,
+        loading,
+        reloadAnnotations,
+    ]);
+
+    const handleOpenAIAnnotate = useCallback(async () => {
+        if (loading || frameIsDeleted || !openAIPrompt.trim()) return;
+
+        const contextFrameIds = parseContextFrame();
+        if (contextFrameIds === null) {
+            message.error('Context frame must be one integer and different from current frame');
+            return;
+        }
+
+        setLoading(true);
+
+        try {
+            if (jobInstance.annotations.hasUnsavedChanges()) {
+                await jobInstance.annotations.save();
+            }
+
+           const response = await core.server.request(
+    '/api/openai/annotate',
+    {
+        method: 'POST',
+        data: {
+            task_id: jobInstance.taskId,
+            frame_ids: [frame],
+            context_frame_ids: contextFrameIds,
+            prompt: openAIPrompt.trim(),
+        },
+    },
+);
+
+
+            const rqID = response?.data?.rq_id;
+            if (!rqID) {
+                throw new Error('OpenAI request did not return rq_id');
+            }
+
+            const finalRequest = await core.requests.listen(rqID, {
+                callback: () => {},
+            });
+
+            await reloadAnnotations();
+
+            const requestMessage = (finalRequest.message || '').trim();
+            if (requestMessage.startsWith('ChatGPT response:')) {
+                const aiText = requestMessage.replace(/^ChatGPT response:\s*/i, '').trim();
+                if (aiText.length) {
+                    message.info(aiText, 8);
+                } else {
+                    message.success('ChatGPT request completed');
+                }
+            } else {
+                message.success('ChatGPT annotations generated');
+            }
+        } catch (error: any) {
+            message.error(
+                error?.response?.data?.detail ||
+                error?.response?.data?.error ||
+                error?.message ||
+                'ChatGPT annotation failed',
+            );
+        } finally {
+            setLoading(false);
+        }
+    }, [
+        frame,
+        frameIsDeleted,
+        openAIPrompt,
+        jobInstance,
+        loading,
+        parseContextFrame,
+        reloadAnnotations,
     ]);
 
     const handlers: Record<keyof typeof componentShortcuts, (event?: KeyboardEvent) => void> = {
@@ -98,17 +194,45 @@ function AutoAnnotateControlComponent(): JSX.Element {
     };
 
     const content = (
-        <div style={{ textAlign: 'center', minWidth: 200 }}>
-            <Text>Generate inference for current frame</Text>
-            <br /><br />
-            <Button
-                type="primary"
-                onClick={handleAutoAnnotate}
-                disabled={loading || frameIsDeleted}
-                loading={loading}
-            >
-                Generate inference
-            </Button>
+        <div style={{ minWidth: 280 }}>
+            <div style={{ textAlign: 'center' }}>
+                <Text>Generate inference for current frame</Text>
+                <br /><br />
+                <Button
+                    type='primary'
+                    onClick={handleAutoAnnotate}
+                    disabled={loading || frameIsDeleted}
+                    loading={loading}
+                >
+                    Generate inference
+                </Button>
+            </div>
+
+            <div style={{ marginTop: 16, borderTop: '1px solid #f0f0f0', paddingTop: 12 }}>
+                <Text strong>Generate annotations (ChatGPT)</Text>
+                <TextArea
+                    rows={4}
+                    value={openAIPrompt}
+                    onChange={(event): void => setOpenAIPrompt(event.target.value)}
+                    placeholder='Describe what to annotate on the frame'
+                    style={{ marginTop: 8, marginBottom: 8 }}
+                />
+                <Input
+                    value={contextFrameText}
+                    onChange={(event): void => setContextFrameText(event.target.value)}
+                    placeholder='Context frame (optional, single frame number)'
+                    style={{ marginBottom: 8 }}
+                />
+                <Button
+                    type='primary'
+                    onClick={handleOpenAIAnnotate}
+                    disabled={loading || frameIsDeleted || !openAIPrompt.trim()}
+                    loading={loading}
+                    block
+                >
+                    Generate annotations (ChatGPT)
+                </Button>
+            </div>
         </div>
     );
 
@@ -121,8 +245,8 @@ function AutoAnnotateControlComponent(): JSX.Element {
             >
                 <CustomPopover placement='right' content={content} trigger='click'>
                     <Button
-                        className="cvat-auto-annotate-control cvat-canvas-control"
-                        type="link"
+                        className='cvat-auto-annotate-control cvat-canvas-control'
+                        type='link'
                         disabled={frameIsDeleted}>
                         <RobotOutlined />
                     </Button>
@@ -133,3 +257,5 @@ function AutoAnnotateControlComponent(): JSX.Element {
 }
 
 export default React.memo(AutoAnnotateControlComponent);
+
+

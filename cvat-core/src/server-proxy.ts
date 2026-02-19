@@ -679,7 +679,7 @@ async function getRequestStatus(rqID: string): Promise<SerializedRequest> {
 
     while (retryCount < 3) {
         try {
-            const response = await Axios.get(`${backendAPI}/requests/${rqID}`);
+            const response = await Axios.get(`${backendAPI}/requests/${encodeURIComponent(rqID)}`);
 
             return response.data;
         } catch (errorData) {

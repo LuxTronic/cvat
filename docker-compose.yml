@@ -8,6 +8,7 @@ name: cvat
 x-backend-env: &backend-env
   CVAT_POSTGRES_HOST: cvat_db
   CVAT_REDIS_INMEM_HOST: cvat_redis_inmem
+  CVAT_OPENAI_API_KEY: ${CVAT_OPENAI_API_KEY}
   CVAT_REDIS_INMEM_PORT: 6379
   CVAT_REDIS_ONDISK_HOST: cvat_redis_ondisk
   CVAT_REDIS_ONDISK_PORT: 6666
@@ -201,6 +202,7 @@ services:
     depends_on: *backend-deps
     environment:
       <<: *backend-env
+
       NUMPROCS: 1
     command: run worker annotation
     volumes:

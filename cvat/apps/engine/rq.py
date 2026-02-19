@@ -25,7 +25,7 @@ from cvat.apps.engine.types import ExtendedRequest
 from cvat.apps.engine.utils import take_by
 from cvat.apps.redis_handler.apps import SELECTOR_TO_QUEUE
 from cvat.apps.redis_handler.rq import RequestId, RequestIdWithOptionalSubresource
-from cvat.apps.engine.models import RequestTarget
+from cvat.apps.engine.models import RequestAction, RequestTarget
 
 if TYPE_CHECKING:
     from django.contrib.auth.models import User
@@ -375,16 +375,24 @@ class ExportRequestId(
 
 
 
+@attrs.frozen(kw_only=True, slots=False)
 class AutoAnnotateRequestId(RequestId):
-    ACTION_ALLOWED_VALUES = ("autoannotate",)
-    TARGET_ALLOWED_VALUES = (RequestTarget.JOB,)
+    ACTION_ALLOWED_VALUES = (
+        RequestAction.AUTOANNOTATE.value,
+        RequestAction.OPENAIANNOTATE.value,
+    )
+
+    TARGET_ALLOWED_VALUES = (
+        RequestTarget.TASK.value,
+        RequestTarget.JOB.value,
+    )
 
     QUEUE_SELECTORS = [
-        ("autoannotate", RequestTarget.JOB),
+    (RequestAction.AUTOANNOTATE, RequestTarget.TASK),
+    (RequestAction.AUTOANNOTATE, RequestTarget.JOB),
+    (RequestAction.OPENAIANNOTATE, RequestTarget.TASK),
+    RequestAction.OPENAIANNOTATE,   # <-- ADD THIS
     ]
-
-    def render(self) -> str:
-        return f"autoannotate:job-{self.target_id}"
 
 @attrs.frozen(kw_only=True, slots=False)
 class ImportRequestId(
@@ -526,3 +534,5 @@ def update_org_related_data_in_rq_jobs(
         # FUTURE-TODO: probably need to move it into a background process
         # and update RQ jobs in batches with rollback support.
         pipe.execute()  # it handles empty pipe.command_stack too
+
+
