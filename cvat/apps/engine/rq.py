@@ -379,7 +379,7 @@ class ExportRequestId(
 class AutoAnnotateRequestId(RequestId):
     ACTION_ALLOWED_VALUES = (
         RequestAction.AUTOANNOTATE.value,
-        RequestAction.OPENAIANNOTATE.value,
+        RequestAction.GPTANNOTATE.value,
     )
 
     TARGET_ALLOWED_VALUES = (
@@ -390,8 +390,8 @@ class AutoAnnotateRequestId(RequestId):
     QUEUE_SELECTORS = [
     (RequestAction.AUTOANNOTATE, RequestTarget.TASK),
     (RequestAction.AUTOANNOTATE, RequestTarget.JOB),
-    (RequestAction.OPENAIANNOTATE, RequestTarget.TASK),
-    RequestAction.OPENAIANNOTATE,   # <-- ADD THIS
+    (RequestAction.GPTANNOTATE, RequestTarget.TASK),
+    RequestAction.GPTANNOTATE,   # <-- ADD THIS
     ]
 
 @attrs.frozen(kw_only=True, slots=False)

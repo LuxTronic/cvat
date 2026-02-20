@@ -1458,7 +1458,7 @@ class Asset(models.Model):
 
 class RequestAction(TextChoices):
     AUTOANNOTATE = "autoannotate"
-    OPENAIANNOTATE = "openaiannotate"
+    GPTANNOTATE = "gptannotate"
     CREATE = "create"
     IMPORT = "import"
     EXPORT = "export"

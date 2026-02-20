@@ -369,12 +369,12 @@ YOLOV7_SERVICE = {
     "TIMEOUT": int(os.getenv("CVAT_YOLOV7_SERVICE_TIMEOUT", 300)),
 }
 
-OPENAI = {
-    "URL": os.getenv("CVAT_OPENAI_URL", "https://api.openai.com"),
-    "API_KEY": os.getenv("CVAT_OPENAI_API_KEY", ""),
-    "MODEL": os.getenv("CVAT_OPENAI_MODEL", "gpt-4.1-mini"),
-    "TIMEOUT": int(os.getenv("CVAT_OPENAI_TIMEOUT", 120)),
-    "MAX_CONTEXT_FRAMES": int(os.getenv("CVAT_OPENAI_MAX_CONTEXT_FRAMES", 1)),
+GEMINI = {
+    "URL": os.getenv("CVAT_GEMINI_URL", "https://generativelanguage.googleapis.com"),
+    "API_KEY": os.getenv("CVAT_GEMINI_API_KEY", ""),
+    "MODEL": os.getenv("CVAT_GEMINI_MODEL", "gemini-3-flash-preview"),
+    "TIMEOUT": int(os.getenv("CVAT_GEMINI_TIMEOUT", 120)),
+    "MAX_CONTEXT_FRAMES": int(os.getenv("CVAT_GEMINI_MAX_CONTEXT_FRAMES", 1)),
 }
 
 PERIODIC_RQ_JOBS = [
@@ -801,5 +801,6 @@ USER_LAST_ACTIVITY_UPDATE_MIN_INTERVAL = timedelta(days=1)
 
 # Health check settings
 HEALTH_CHECK = {"DISK_USAGE_MAX": int(os.getenv("CVAT_HEALTH_DISK_USAGE_MAX", 90))}
+
 
 

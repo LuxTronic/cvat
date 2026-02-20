@@ -10,7 +10,7 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, Spec
 from rest_framework import routers
 
 from . import views
-from .openai import OpenAIViewSet
+from .model_annotation import ModelAnnotationViewSet
 
 router = routers.DefaultRouter(trailing_slash=False)
 router.register("projects", views.ProjectViewSet)
@@ -24,7 +24,7 @@ router.register("labels", views.LabelViewSet)
 router.register("cloudstorages", views.CloudStorageViewSet)
 router.register("assets", views.AssetsViewSet)
 router.register("guides", views.AnnotationGuidesViewSet)
-router.register("openai", OpenAIViewSet, basename="openai")
+router.register("model", ModelAnnotationViewSet, basename="model")
 
 urlpatterns = [
     # Entry point for a client
@@ -58,5 +58,6 @@ urlpatterns = [
     path("api/", include("cvat.apps.organizations.urls")),
     path("api/", include(router.urls)),
 ]
+
 
 

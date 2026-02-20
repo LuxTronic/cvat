@@ -50,7 +50,7 @@ function AutoAnnotateControlComponent(): JSX.Element {
         normalizedKeyMap: state.shortcuts.normalizedKeyMap,
     }));
     const [loading, setLoading] = useState(false);
-    const [openAIPrompt, setOpenAIPrompt] = useState('');
+    const [modelPrompt, setModelPrompt] = useState('');
     const [contextFrameText, setContextFrameText] = useState('');
 
     const parseContextFrame = useCallback((): number[] | null => {
@@ -114,8 +114,8 @@ function AutoAnnotateControlComponent(): JSX.Element {
         reloadAnnotations,
     ]);
 
-    const handleOpenAIAnnotate = useCallback(async () => {
-        if (loading || frameIsDeleted || !openAIPrompt.trim()) return;
+    const handleModelAnnotate = useCallback(async () => {
+        if (loading || frameIsDeleted || !modelPrompt.trim()) return;
 
         const contextFrameIds = parseContextFrame();
         if (contextFrameIds === null) {
@@ -131,14 +131,14 @@ function AutoAnnotateControlComponent(): JSX.Element {
             }
 
            const response = await core.server.request(
-    '/api/openai/annotate',
+    '/api/model/annotate',
     {
         method: 'POST',
         data: {
             task_id: jobInstance.taskId,
             frame_ids: [frame],
             context_frame_ids: contextFrameIds,
-            prompt: openAIPrompt.trim(),
+            prompt: modelPrompt.trim(),
         },
     },
 );
@@ -146,7 +146,7 @@ function AutoAnnotateControlComponent(): JSX.Element {
 
             const rqID = response?.data?.rq_id;
             if (!rqID) {
-                throw new Error('OpenAI request did not return rq_id');
+                throw new Error('Model request did not return rq_id');
             }
 
             const finalRequest = await core.requests.listen(rqID, {
@@ -156,22 +156,22 @@ function AutoAnnotateControlComponent(): JSX.Element {
             await reloadAnnotations();
 
             const requestMessage = (finalRequest.message || '').trim();
-            if (requestMessage.startsWith('ChatGPT response:')) {
-                const aiText = requestMessage.replace(/^ChatGPT response:\s*/i, '').trim();
+            if (requestMessage.startsWith('Model response:')) {
+                const aiText = requestMessage.replace(/^Model response:\s*/i, '').trim();
                 if (aiText.length) {
                     message.info(aiText, 8);
                 } else {
-                    message.success('ChatGPT request completed');
+                    message.success('Model request completed');
                 }
             } else {
-                message.success('ChatGPT annotations generated');
+                message.success('Model annotations generated');
             }
         } catch (error: any) {
             message.error(
                 error?.response?.data?.detail ||
                 error?.response?.data?.error ||
                 error?.message ||
-                'ChatGPT annotation failed',
+                'Model annotation failed',
             );
         } finally {
             setLoading(false);
@@ -179,7 +179,7 @@ function AutoAnnotateControlComponent(): JSX.Element {
     }, [
         frame,
         frameIsDeleted,
-        openAIPrompt,
+        modelPrompt,
         jobInstance,
         loading,
         parseContextFrame,
@@ -209,11 +209,11 @@ function AutoAnnotateControlComponent(): JSX.Element {
             </div>
 
             <div style={{ marginTop: 16, borderTop: '1px solid #f0f0f0', paddingTop: 12 }}>
-                <Text strong>Generate annotations (ChatGPT)</Text>
+                <Text strong>Generate annotations (AI Model)</Text>
                 <TextArea
                     rows={4}
-                    value={openAIPrompt}
-                    onChange={(event): void => setOpenAIPrompt(event.target.value)}
+                    value={modelPrompt}
+                    onChange={(event): void => setModelPrompt(event.target.value)}
                     placeholder='Describe what to annotate on the frame'
                     style={{ marginTop: 8, marginBottom: 8 }}
                 />
@@ -225,12 +225,12 @@ function AutoAnnotateControlComponent(): JSX.Element {
                 />
                 <Button
                     type='primary'
-                    onClick={handleOpenAIAnnotate}
-                    disabled={loading || frameIsDeleted || !openAIPrompt.trim()}
+                    onClick={handleModelAnnotate}
+                    disabled={loading || frameIsDeleted || !modelPrompt.trim()}
                     loading={loading}
                     block
                 >
-                    Generate annotations (ChatGPT)
+                    Generate annotations (AI Model)
                 </Button>
             </div>
         </div>
@@ -257,5 +257,6 @@ function AutoAnnotateControlComponent(): JSX.Element {
 }
 
 export default React.memo(AutoAnnotateControlComponent);
+
 
 
