@@ -98,15 +98,22 @@ export default interface CVATCore {
         get: (filter: ApiTokensFilter) => Promise<PaginatedResource<ApiToken>>;
     };
     jobs: {
-        get: (filter: {
-            page?: number;
-            filter?: string;
-            sort?: string;
-            search?: string;
-            jobID?: number;
-            taskID?: number;
-            type?: string;
-        }, aggregate?: boolean) => Promise<PaginatedResource<Job>>;
+        get: (
+            filter: {
+                page?: number;
+                filter?: string;
+                sort?: string;
+                search?: string;
+                jobID?: number;
+                taskID?: number;
+                type?: string;
+            },
+            aggregate?: boolean
+        ) => Promise<PaginatedResource<Job>>,
+        autoAnnotate: (
+            jobID: number,
+            frame: number
+        ) => Promise<string>;
     };
     tasks: {
         get: (filter: {

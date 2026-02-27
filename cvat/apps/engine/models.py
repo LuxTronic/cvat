@@ -1464,6 +1464,7 @@ class Asset(models.Model):
 
 class RequestAction(TextChoices):
     AUTOANNOTATE = "autoannotate"
+    GPTANNOTATE = "gptannotate"
     CREATE = "create"
     IMPORT = "import"
     EXPORT = "export"
@@ -1477,3 +1478,5 @@ class RequestSubresource(TextChoices):
     ANNOTATIONS = "annotations"
     DATASET = "dataset"
     BACKUP = "backup"
+
+
