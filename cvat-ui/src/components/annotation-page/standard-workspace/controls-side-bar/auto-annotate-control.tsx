@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import Button from 'antd/lib/button';
 import Popover from 'antd/lib/popover';
@@ -38,12 +38,14 @@ function AutoAnnotateControlComponent(): JSX.Element {
     const dispatch = useDispatch<any>();
     const {
         jobInstance,
+        labels,
         frame,
         frameIsDeleted,
         keyMap,
         normalizedKeyMap,
     } = useSelector((state: CombinedState) => ({
         jobInstance: state.annotation.job.instance,
+        labels: state.annotation.job.labels,
         frame: state.annotation.player.frame.number,
         frameIsDeleted: state.annotation.player.frame.data.deleted,
         keyMap: state.shortcuts.keyMap,
@@ -52,6 +54,12 @@ function AutoAnnotateControlComponent(): JSX.Element {
     const [loading, setLoading] = useState(false);
     const [modelPrompt, setModelPrompt] = useState('');
     const [contextFrameText, setContextFrameText] = useState('');
+    const labelNames = useMemo(
+        () => (labels || [])
+            .map((label: any): string => String(label?.name || '').trim())
+            .filter((name: string): boolean => Boolean(name.length)),
+        [labels],
+    );
 
     const parseContextFrame = useCallback((): number[] | null => {
         const trimmed = contextFrameText.trim();
@@ -186,6 +194,15 @@ function AutoAnnotateControlComponent(): JSX.Element {
         reloadAnnotations,
     ]);
 
+    const handleAutofillPromptWithLabels = useCallback(() => {
+        if (!labelNames.length) {
+            message.warning('No task labels found to build a prompt');
+            return;
+        }
+
+        setModelPrompt(`Annotate the objects in the image where the labels are: ${labelNames.join(', ')}.`);
+    }, [labelNames]);
+
     const handlers: Record<keyof typeof componentShortcuts, (event?: KeyboardEvent) => void> = {
         SWITCH_AUTO_ANNOTATE_STANDARD_CONTROLS: (event: KeyboardEvent | undefined) => {
             if (event) event.preventDefault();
@@ -217,6 +234,14 @@ function AutoAnnotateControlComponent(): JSX.Element {
                     placeholder='Describe what to annotate on the frame'
                     style={{ marginTop: 8, marginBottom: 8 }}
                 />
+                <Button
+                    onClick={handleAutofillPromptWithLabels}
+                    disabled={loading || frameIsDeleted}
+                    style={{ marginBottom: 8 }}
+                    block
+                >
+                    Autofill prompt with task labels
+                </Button>
                 <Input
                     value={contextFrameText}
                     onChange={(event): void => setContextFrameText(event.target.value)}
@@ -257,6 +282,4 @@ function AutoAnnotateControlComponent(): JSX.Element {
 }
 
 export default React.memo(AutoAnnotateControlComponent);
-
-
 

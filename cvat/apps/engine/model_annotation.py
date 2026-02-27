@@ -198,11 +198,20 @@ def _build_content(
     *,
     user_prompt: str,
     label_names: Iterable[str],
+    include_task_labels_in_prompt: bool,
     target_frame_id: int,
     target_part: dict,
     context_parts: list[dict],
 ) -> list[dict]:
-    labels_prompt = ", ".join(sorted(label_names))
+    sorted_label_names = sorted(label_names)
+    labels_prompt = ", ".join(sorted_label_names)
+    effective_user_prompt = user_prompt
+    if include_task_labels_in_prompt:
+        effective_user_prompt = (
+            f"{user_prompt}\n"
+            f"Annotate the objects in the image where the labels are: [{labels_prompt}]."
+        )
+
     instruction = (
         "You are assisting with image annotation.\n"
         f"Allowed classes for detections: [{labels_prompt}].\n"
@@ -213,7 +222,7 @@ def _build_content(
         "- xmin < xmax and ymin < ymax\n"
         "- label must be from allowed classes\n"
         "- If no objects match, return []\n"
-        f"User prompt: {user_prompt}\n"
+        f"User prompt: {effective_user_prompt}\n"
         f"Target frame id: {target_frame_id}."
     )
 
@@ -345,8 +354,9 @@ def run_model_annotation_task(
     target_frame_id = frame_ids[0]
     frame_provider.validate_frame_number(target_frame_id)
 
-    timeout = max(1, int(options.get("timeout", settings.GEMINI.get("TIMEOUT", 120))))
+    timeout = max(1, int(options.get("timeout", settings.GEMINI.get("TIMEOUT", 500))))
     model = str(options.get("model", settings.GEMINI.get("MODEL", "gemini-3-flash-preview")))
+    include_task_labels_in_prompt = bool(options.get("include_task_labels_in_prompt", False))
 
     context_parts: list[dict] = []
     if context_frame_ids:
@@ -363,6 +373,7 @@ def run_model_annotation_task(
     content = _build_content(
         user_prompt=prompt,
         label_names=label_map.keys(),
+        include_task_labels_in_prompt=include_task_labels_in_prompt,
         target_frame_id=target_frame_id,
         target_part=target_part,
         context_parts=context_parts,

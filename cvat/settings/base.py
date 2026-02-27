@@ -373,7 +373,7 @@ GEMINI = {
     "URL": os.getenv("CVAT_GEMINI_URL", "https://generativelanguage.googleapis.com"),
     "API_KEY": os.getenv("CVAT_GEMINI_API_KEY", ""),
     "MODEL": os.getenv("CVAT_GEMINI_MODEL", "gemini-3-flash-preview"),
-    "TIMEOUT": int(os.getenv("CVAT_GEMINI_TIMEOUT", 120)),
+    "TIMEOUT": int(os.getenv("CVAT_GEMINI_TIMEOUT", 500)),
     "MAX_CONTEXT_FRAMES": int(os.getenv("CVAT_GEMINI_MAX_CONTEXT_FRAMES", 1)),
 }
 
