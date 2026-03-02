@@ -52,7 +52,7 @@ function configureStorage(storage: Storage, useDefaultLocation = false): Partial
         ...(!useDefaultLocation ? {
             location: storage.location,
             ...(storage.cloudStorageId ? {
-                cloud_storage_id: storage.cloudStorageId,
+                cloud_storage_id:    storage.cloudStorageId,
             } : {}),
         } : {}),
     };
@@ -679,7 +679,7 @@ async function getRequestStatus(rqID: string): Promise<SerializedRequest> {
 
     while (retryCount < 3) {
         try {
-            const response = await Axios.get(`${backendAPI}/requests/${rqID}`);
+            const response = await Axios.get(`${backendAPI}/requests/${encodeURIComponent(rqID)}`);
 
             return response.data;
         } catch (errorData) {
@@ -2510,7 +2510,6 @@ export default Object.freeze({
         validationLayout: validationLayout('tasks'),
         mergeConsensusJobs,
     }),
-
     labels: Object.freeze({
         get: getLabels,
         delete: deleteLabel,
@@ -2526,6 +2525,26 @@ export default Object.freeze({
         exportDataset: exportDataset('jobs'),
         validationLayout: validationLayout('jobs'),
         mergeConsensusJobs,
+        autoAnnotate: async (jobID: number, frame: number): Promise<string> => {
+            const { backendAPI } = config;
+
+            const response = await Axios.post(
+                `${backendAPI}/jobs/${jobID}/auto-annotate`,
+                {},
+                {
+                    params: {
+                        ...enableOrganization(),
+                        frame,
+                    },
+                },
+            );
+
+            if (response.status !== 202) {
+                throw new Error(`Unexpected status: ${response.status}`);
+            }
+
+            return response.data.rq_id;
+        },
     }),
 
     users: Object.freeze({

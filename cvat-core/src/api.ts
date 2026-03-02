@@ -166,6 +166,14 @@ function build(): CVATCore {
                 const result = await PluginRegistry.apiWrapper(cvat.jobs.get, filter, aggregate);
                 return result;
             },
+            async autoAnnotate(jobID: number, frame: number) {
+                const result = await PluginRegistry.apiWrapper(
+                    cvat.jobs.autoAnnotate,
+                    jobID,
+                    frame,
+                );
+                return result;
+            },
         },
         frames: {
             async getMeta(type, id) {

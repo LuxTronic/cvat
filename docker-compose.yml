@@ -8,6 +8,7 @@ name: cvat
 x-backend-env: &backend-env
   CVAT_POSTGRES_HOST: cvat_db
   CVAT_REDIS_INMEM_HOST: cvat_redis_inmem
+  CVAT_GEMINI_API_KEY: ${CVAT_GEMINI_API_KEY}
   CVAT_REDIS_INMEM_PORT: 6379
   CVAT_REDIS_ONDISK_HOST: cvat_redis_ondisk
   CVAT_REDIS_ONDISK_PORT: 6666
@@ -112,6 +113,8 @@ services:
       - cvat_data:/home/django/data
       - cvat_keys:/home/django/keys
       - cvat_logs:/home/django/logs
+      - yolov7_models:/models
+
     networks:
       cvat:
         aliases:
@@ -131,8 +134,32 @@ services:
       - cvat_data:/home/django/data
       - cvat_keys:/home/django/keys
       - cvat_logs:/home/django/logs
+      - yolov7_models:/models
+
     networks:
       - cvat
+
+  yolov7:
+    container_name: yolov7
+    build: ./yolov7
+    restart: always
+    user: "1000:1000"
+    runtime: nvidia
+    ipc: host
+    environment:
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+    volumes:
+      - yolov7_models:/models
+      - ./yolov7:/yolov7
+    ports:
+      - "8000:8000"
+    networks:
+      - cvat
+
+
+
+
 
   cvat_worker_import:
     container_name: cvat_worker_import
@@ -147,6 +174,9 @@ services:
       - cvat_data:/home/django/data
       - cvat_keys:/home/django/keys
       - cvat_logs:/home/django/logs
+      - yolov7_models:/models
+      - ./yolov7:/yolov7
+
     networks:
       - cvat
 
@@ -165,7 +195,6 @@ services:
       - cvat_logs:/home/django/logs
     networks:
       - cvat
-
   cvat_worker_annotation:
     container_name: cvat_worker_annotation
     image: cvat/server:${CVAT_VERSION:-dev}
@@ -173,12 +202,15 @@ services:
     depends_on: *backend-deps
     environment:
       <<: *backend-env
+
       NUMPROCS: 1
     command: run worker annotation
     volumes:
       - cvat_data:/home/django/data
       - cvat_keys:/home/django/keys
       - cvat_logs:/home/django/logs
+      - yolov7_models:/models
+
     networks:
       - cvat
 
@@ -426,6 +458,7 @@ volumes:
   cvat_inmem_db:
   cvat_events_db:
   cvat_cache_db:
+  yolov7_models:
 
 networks:
   cvat:

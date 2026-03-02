@@ -5,6 +5,7 @@
 
 import itertools
 import os
+from rq.job import JobStatus
 import os.path as osp
 import shutil
 import textwrap
@@ -1882,6 +1883,46 @@ class JobViewSet(viewsets.GenericViewSet, mixins.ListModelMixin, mixins.CreateMo
                 except (AttributeError, IntegrityError) as e:
                     return Response(data=str(e), status=status.HTTP_400_BAD_REQUEST)
                 return Response(data)
+    @extend_schema(
+        methods=["POST"],
+        summary="Generate inference using YOLOv7 service",
+        parameters=[
+            OpenApiParameter(
+                'frame',
+                location=OpenApiParameter.QUERY,
+                type=OpenApiTypes.INT,
+                required=True,
+                description='Frame number to process',
+            ),
+        ],
+        responses={
+            '202': OpenApiResponse(RqIdSerializer),
+            '409': OpenApiResponse(description='Inference already running'),
+        },
+    )
+    @action(detail=True, methods=["POST"], url_path="auto-annotate")
+    def auto_annotate(self, request: ExtendedRequest, pk: int):
+        from cvat.apps.engine.background import run_yolov7_inference_frame
+
+        db_job = self.get_object()
+
+        frame = request.query_params.get("frame")
+        if frame is None:
+            raise ValidationError("frame is required")
+
+        frame = int(frame)
+
+        task_id = db_job.segment.task.data.id
+        
+        # Run inference synchronously
+        run_yolov7_inference_frame(
+            job_id=db_job.id,
+            task_id=task_id,
+            frame=frame,
+        )
+
+        return Response(status=200)
+
 
 
     @tus_chunk_action(detail=True, suffix_base="annotations")
