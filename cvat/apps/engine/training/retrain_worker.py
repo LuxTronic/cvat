@@ -1,4 +1,5 @@
 import logging
+import random
 import shutil
 from pathlib import Path
 
@@ -21,32 +22,101 @@ log = logging.getLogger(__name__)
 
 
 def _resolve_classification_dataset_dir(data_dir: Path) -> Path:
-    # Case 1: expected Ultralytics layout already present.
-    if (data_dir / "train").is_dir():
-        return data_dir
-
-    # Case 2: a single nested folder contains train/.
-    for child in sorted(data_dir.iterdir()):
-        if child.is_dir() and (child / "train").is_dir():
-            return child
-
-    # Case 3: ImageNet-style export (class folders at root or in one nested folder).
     def _class_dirs(root: Path) -> list[Path]:
-        ignore = {"train", "val", "test", "__MACOSX"}
+        ignore = {"train", "val", "test", "__MACOSX", "no_label"}
         return [p for p in root.iterdir() if p.is_dir() and p.name not in ignore]
+
+    def _is_image_file(path: Path) -> bool:
+        return path.suffix.lower() in {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
+
+    def _prepare_imagenet_split(root: Path, classes: list[Path]) -> Path:
+        # Remove explicit no_label buckets if present.
+        for name in ("no_label", "NO_LABEL"):
+            no_label_dir = root / name
+            if no_label_dir.exists() and no_label_dir.is_dir():
+                shutil.rmtree(no_label_dir)
+
+        train_dir = root / "train"
+        val_dir = root / "val"
+        if train_dir.exists():
+            shutil.rmtree(train_dir)
+        if val_dir.exists():
+            shutil.rmtree(val_dir)
+        train_dir.mkdir(parents=True, exist_ok=True)
+        val_dir.mkdir(parents=True, exist_ok=True)
+
+        rng = random.Random(42)
+
+        for cls_dir in sorted(classes, key=lambda p: p.name):
+            image_paths = [p for p in cls_dir.rglob("*") if p.is_file() and _is_image_file(p)]
+            if not image_paths:
+                continue
+
+            rng.shuffle(image_paths)
+            total = len(image_paths)
+            val_count = int(total * 0.15)
+            if total > 1:
+                val_count = max(1, val_count)
+                val_count = min(val_count, total - 1)
+            else:
+                val_count = 0
+
+            for idx, src in enumerate(image_paths):
+                split_root = val_dir if idx < val_count else train_dir
+                dst = split_root / cls_dir.name / src.relative_to(cls_dir)
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(src), str(dst))
+
+            shutil.rmtree(cls_dir, ignore_errors=True)
+
+        return root
+
+    def _ensure_val_from_train(root: Path) -> Path:
+        train_dir = root / "train"
+        val_dir = root / "val"
+
+        # Remove no_label if present in train.
+        for name in ("no_label", "NO_LABEL"):
+            no_label_dir = train_dir / name
+            if no_label_dir.exists() and no_label_dir.is_dir():
+                shutil.rmtree(no_label_dir)
+
+        val_dir.mkdir(parents=True, exist_ok=True)
+        rng = random.Random(42)
+
+        class_dirs = [p for p in train_dir.iterdir() if p.is_dir() and p.name != "__MACOSX"]
+        for cls_dir in sorted(class_dirs, key=lambda p: p.name):
+            image_paths = [p for p in cls_dir.rglob("*") if p.is_file() and _is_image_file(p)]
+            if not image_paths:
+                continue
+
+            rng.shuffle(image_paths)
+            total = len(image_paths)
+            val_count = int(total * 0.15)
+            if total > 1:
+                val_count = max(1, val_count)
+                val_count = min(val_count, total - 1)
+            else:
+                val_count = 0
+
+            for idx, src in enumerate(image_paths):
+                if idx >= val_count:
+                    break
+                dst = val_dir / cls_dir.name / src.relative_to(cls_dir)
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(src), str(dst))
+
+        return root
 
     candidate_roots = [data_dir] + [p for p in data_dir.iterdir() if p.is_dir()]
     for root in candidate_roots:
+        # If this root already has train/, ensure val/ split exists.
+        if (root / "train").is_dir():
+            return _ensure_val_from_train(root)
+
         classes = _class_dirs(root)
         if classes:
-            train_dir = root / "train"
-            train_dir.mkdir(exist_ok=True)
-            for cls_dir in classes:
-                target = train_dir / cls_dir.name
-                if target.exists():
-                    shutil.rmtree(target)
-                cls_dir.rename(target)
-            return root
+            return _prepare_imagenet_split(root, classes)
 
     raise RuntimeError(f"Failed to locate classification dataset root under {data_dir}")
 

@@ -1,6 +1,12 @@
-FROM nvcr.io/nvidia/pytorch:21.08-py3
+FROM nvcr.io/nvidia/pytorch:26.02-py3
 
 WORKDIR /yolov8-cls
+
+# Install Python deps
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+RUN pip install --no-cache-dir --no-deps ultralytics
 
 # Remove conflicting OpenCV packages
 RUN apt-get update && apt-get remove -y \
@@ -13,10 +19,6 @@ RUN apt-get update && apt-get install -y \
     libgl1 \
     wget \
     && rm -rf /var/lib/apt/lists/*
-
-# Install Python deps
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy service code
 COPY . .

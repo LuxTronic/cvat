@@ -2,7 +2,8 @@ fastapi
 uvicorn
 python-multipart
 pillow
-numpy
-ultralytics
+numpy<2
 redis
 requests
+opencv-python-headless==4.5.5.64
+polars

@@ -2,6 +2,8 @@ FROM nvcr.io/nvidia/pytorch:21.08-py3
 
 WORKDIR /yolov7
 
+
+
 # Remove conflicting OpenCV packages
 RUN apt-get update && apt-get remove -y \
     python3-opencv \

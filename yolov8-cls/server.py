@@ -1,10 +1,12 @@
+from __future__ import annotations
+
 import io
 import logging
 import os
 import subprocess
 import threading
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, List
 
 import numpy as np
 import redis
@@ -26,9 +28,9 @@ REDIS_HOST = os.environ.get("CVAT_REDIS_INMEM_HOST", "cvat_redis_inmem")
 REDIS_PORT = int(os.environ.get("CVAT_REDIS_INMEM_PORT", "6379"))
 r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
 
-MODEL_CACHE: dict[int, YOLO] = {}
+MODEL_CACHE: Dict[int, YOLO] = {}
 MODEL_CACHE_LOCK = threading.Lock()
-MODEL_INFER_LOCKS: dict[int, threading.Lock] = {}
+MODEL_INFER_LOCKS: Dict[int, threading.Lock] = {}
 MODEL_INFER_LOCKS_LOCK = threading.Lock()
 
 
@@ -47,7 +49,7 @@ def _active_weights_path(task_id: int) -> Path:
     return _task_dir(task_id) / "active" / "weights" / "best.pt"
 
 
-def _list_versions(task_id: int) -> list[Path]:
+def _list_versions(task_id: int) -> List[Path]:
     tdir = _task_dir(task_id)
     return sorted([p for p in tdir.glob("v*") if p.is_dir()], key=lambda p: p.name)
 
@@ -140,7 +142,7 @@ def _run_training(task_id: int, dataset_dir: str, epochs: int, imgsz: int):
 
 
 @app.get("/health")
-def health() -> dict[str, Any]:
+def health() -> Dict[str, Any]:
     return {
         "status": "ok",
         "base_weights": str(BASE_WEIGHTS),
@@ -149,7 +151,7 @@ def health() -> dict[str, Any]:
 
 
 @app.post("/train")
-def train(payload: dict[str, Any]):
+def train(payload: Dict[str, Any]):
     task_id = int(payload["task_id"])
     dataset_dir = str(payload.get("dataset_dir") or (_task_dir(task_id) / "data"))
     epochs = int(payload.get("epochs", 30))
@@ -225,4 +227,3 @@ async def infer(
     except Exception as e:
         log.exception("[YOLOv8-CLS] Inference failed")
         return JSONResponse(status_code=500, content={"error": str(e)})
-

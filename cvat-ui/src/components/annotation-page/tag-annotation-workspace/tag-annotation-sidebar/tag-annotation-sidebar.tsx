@@ -14,6 +14,7 @@ import {
 import Layout, { SiderProps } from 'antd/lib/layout';
 import Checkbox, { CheckboxChangeEvent } from 'antd/lib/checkbox/Checkbox';
 import Button from 'antd/lib/button/button';
+import message from 'antd/lib/message';
 import Text from 'antd/lib/typography/Text';
 
 import {
@@ -52,7 +53,7 @@ interface StateToProps {
 interface DispatchToProps {
     removeObject(objectState: ObjectState): void;
     createAnnotations(objectStates: ObjectState[]): void;
-    changeFrame(frame: number, fillBuffer?: boolean, frameStep?: number): void;
+    changeFrame(frame: number, fillBuffer?: boolean, frameStep?: number, forceUpdate?: boolean): void;
     onRememberObject(labelID: number): void;
 }
 
@@ -96,8 +97,8 @@ registerComponentShortcuts(componentShortcuts);
 
 function mapDispatchToProps(dispatch: ThunkDispatch<CombinedState, {}, Action>): DispatchToProps {
     return {
-        changeFrame(frame: number, fillBuffer?: boolean, frameStep?: number): void {
-            dispatch(changeFrameAsync(frame, fillBuffer, frameStep));
+        changeFrame(frame: number, fillBuffer?: boolean, frameStep?: number, forceUpdate?: boolean): void {
+            dispatch(changeFrameAsync(frame, fillBuffer, frameStep, forceUpdate));
         },
         createAnnotations(objectStates: ObjectState[]): void {
             dispatch(createAnnotationsAsync(objectStates));
@@ -142,6 +143,7 @@ function TagAnnotationSidebar(props: StateToProps & DispatchToProps): JSX.Elemen
     const [frameTags, setFrameTags] = useState([] as any[]);
     const [selectedLabelID, setSelectedLabelID] = useState<number | null>(defaultLabelID);
     const [skipFrame, setSkipFrame] = useState(false);
+    const [classificationLoading, setClassificationLoading] = useState(false);
 
     useEffect(() => {
         if (document.activeElement instanceof HTMLElement) {
@@ -247,6 +249,40 @@ function TagAnnotationSidebar(props: StateToProps & DispatchToProps): JSX.Elemen
         },
     };
 
+    const onGenerateClassification = useCallback(async () => {
+        if (classificationLoading || controlsDisabled) {
+            return;
+        }
+
+        setClassificationLoading(true);
+        try {
+            if (jobInstance.annotations.hasUnsavedChanges()) {
+                await jobInstance.annotations.save();
+            }
+
+            await cvat.server.request(
+                `/api/jobs/${jobInstance.id}/auto-classify`,
+                {
+                    method: 'POST',
+                    params: { frame: frameNumber },
+                },
+            );
+
+            await jobInstance.annotations.clear({ reload: true });
+            changeFrame(frameNumber, false, undefined, true);
+            message.success('Classification completed successfully');
+        } catch (error: any) {
+            message.error(
+                error?.response?.data?.detail ||
+                error?.response?.data?.error ||
+                error?.message ||
+                'Classification failed',
+            );
+        } finally {
+            setClassificationLoading(false);
+        }
+    }, [classificationLoading, controlsDisabled, jobInstance, frameNumber, changeFrame]);
+
     return controlsDisabled ? (
         <Layout.Sider {...siderProps}>
             {/* eslint-disable-next-line */}
@@ -321,6 +357,17 @@ function TagAnnotationSidebar(props: StateToProps & DispatchToProps): JSX.Elemen
                             Use configured shortcuts to add a new tag.
                             If a tag with such label is already exists on the frame, it will be removed.
                         </Text>
+                        <div style={{ marginTop: 8 }}>
+                            <Button
+                                type='primary'
+                                onClick={onGenerateClassification}
+                                loading={classificationLoading}
+                                disabled={controlsDisabled}
+                                block
+                            >
+                                Generate classification
+                            </Button>
+                        </div>
                     </Col>
                 </Row>
             </Layout.Sider>
