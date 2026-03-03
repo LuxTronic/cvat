@@ -1923,6 +1923,56 @@ class JobViewSet(viewsets.GenericViewSet, mixins.ListModelMixin, mixins.CreateMo
 
         return Response(status=200)
 
+    @extend_schema(
+        methods=["POST"],
+        summary="Generate classification tags using YOLOv8-CLS service",
+        parameters=[
+            OpenApiParameter(
+                "frame",
+                location=OpenApiParameter.QUERY,
+                type=OpenApiTypes.INT,
+                required=True,
+                description="Frame number to process",
+            ),
+            OpenApiParameter(
+                "threshold",
+                location=OpenApiParameter.QUERY,
+                type=OpenApiTypes.FLOAT,
+                required=False,
+                description="Minimum confidence threshold for predicted classes",
+            ),
+            OpenApiParameter(
+                "topk",
+                location=OpenApiParameter.QUERY,
+                type=OpenApiTypes.INT,
+                required=False,
+                description="Number of top classes to keep",
+            ),
+        ],
+    )
+    @action(detail=True, methods=["POST"], url_path="auto-classify")
+    def auto_classify(self, request: ExtendedRequest, pk: int):
+        from cvat.apps.engine.background import run_yolov8cls_inference_frame
+
+        db_job = self.get_object()
+
+        frame = request.query_params.get("frame")
+        if frame is None:
+            raise ValidationError("frame is required")
+
+        threshold = float(request.query_params.get("threshold", 0.0))
+        topk = int(request.query_params.get("topk", 1))
+
+        run_yolov8cls_inference_frame(
+            job_id=db_job.id,
+            task_id=db_job.segment.task.id,
+            frame=int(frame),
+            threshold=threshold,
+            topk=topk,
+        )
+
+        return Response(status=200)
+
 
 
     @tus_chunk_action(detail=True, suffix_base="annotations")

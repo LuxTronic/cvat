@@ -743,3 +743,122 @@ def run_yolov7_inference_frame(job_id: int, task_id: int, frame: int):
         frame_number,
         len(shapes),
     )
+
+
+def run_yolov8cls_inference_frame(
+    job_id: int, task_id: int, frame: int, *, threshold: float = 0.0, topk: int = 1
+):
+    import io
+    import logging
+
+    import requests
+    from PIL import Image
+    from django.conf import settings
+    from django.db import transaction
+
+    from cvat.apps.dataset_manager.task import patch_job_data
+    from cvat.apps.engine.frame_provider import JobFrameProvider
+    from cvat.apps.engine.models import FrameQuality, Job, SourceType
+    from cvat.apps.engine.serializers import LabeledDataSerializer
+
+    log = logging.getLogger(__name__)
+
+    log.info(
+        "[AUTO-CLASSIFY] Starting inference | job_id=%s task_id=%s frame=%s threshold=%s topk=%s",
+        job_id,
+        task_id,
+        frame,
+        threshold,
+        topk,
+    )
+
+    db_job = Job.objects.select_related("segment__task__data").get(pk=job_id)
+    frame_provider = JobFrameProvider(db_job)
+
+    frame_data = frame_provider.get_frame(frame, quality=FrameQuality.ORIGINAL)
+    image_bytes = frame_data.data.getvalue()
+
+    image = Image.open(io.BytesIO(image_bytes))
+    width, height = image.size
+    log.debug(
+        "[AUTO-CLASSIFY] Frame extracted | frame=%s size=%sx%s bytes=%s",
+        frame,
+        width,
+        height,
+        len(image_bytes),
+    )
+
+    yolo_url = f"{settings.YOLOV8CLS_SERVICE['URL']}/infer"
+    response = requests.post(
+        yolo_url,
+        params={"task_id": task_id, "topk": max(int(topk), 1)},
+        files={"image": ("frame.jpg", image_bytes, frame_data.mime)},
+        timeout=settings.YOLOV8CLS_SERVICE.get("TIMEOUT", 300),
+    )
+
+    if not response.ok:
+        log.error(
+            "[AUTO-CLASSIFY] Inference failed | status=%s body=%s",
+            response.status_code,
+            response.text,
+        )
+        try:
+            detail = response.json()
+        except Exception:
+            detail = {"error": response.text}
+        raise serializers.ValidationError(detail)
+
+    predictions = response.json()
+    log.info("[AUTO-CLASSIFY] Service response | predictions=%d", len(predictions))
+
+    labels = db_job.get_labels()
+    label_by_index = {i: l.id for i, l in enumerate(labels)}
+
+    tags = []
+    for pred in predictions:
+        class_id = pred.get("class_id")
+        confidence = float(pred.get("confidence", 0.0))
+        if class_id is None or confidence < float(threshold):
+            continue
+
+        label_id = label_by_index.get(class_id)
+        if label_id is None:
+            log.warning("[AUTO-CLASSIFY] Unknown class_id=%s for job=%s", class_id, job_id)
+            continue
+
+        tags.append(
+            {
+                "label_id": label_id,
+                "frame": frame,
+                "group": None,
+                "attributes": [],
+                "source": str(SourceType.AUTO),
+            }
+        )
+
+    if not tags:
+        log.info("[AUTO-CLASSIFY] No tags passed filtering | job_id=%s frame=%s", job_id, frame)
+        return
+
+    payload = {
+        "version": 0,
+        "tags": tags,
+        "shapes": [],
+        "tracks": [],
+    }
+
+    serializer = LabeledDataSerializer(
+        data=payload,
+        context={"annotation_action": "create"},
+    )
+    serializer.is_valid(raise_exception=True)
+
+    with transaction.atomic():
+        patch_job_data(job_id, serializer.validated_data, action="create")
+
+    log.info(
+        "[AUTO-CLASSIFY] Tags saved | job_id=%s frame=%s tags=%d",
+        job_id,
+        frame,
+        len(tags),
+    )

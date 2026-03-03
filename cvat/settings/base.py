@@ -369,6 +369,11 @@ YOLOV7_SERVICE = {
     "TIMEOUT": int(os.getenv("CVAT_YOLOV7_SERVICE_TIMEOUT", 300)),
 }
 
+YOLOV8CLS_SERVICE = {
+    "URL": os.getenv("CVAT_YOLOV8CLS_SERVICE_URL", "http://host.docker.internal:8001"),
+    "TIMEOUT": int(os.getenv("CVAT_YOLOV8CLS_SERVICE_TIMEOUT", 300)),
+}
+
 GEMINI = {
     "URL": os.getenv("CVAT_GEMINI_URL", "https://generativelanguage.googleapis.com"),
     "API_KEY": os.getenv("CVAT_GEMINI_API_KEY", ""),

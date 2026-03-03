@@ -10,8 +10,8 @@ def ensure_data_yaml(dataset_dir: Path, class_names: list[str]):
     """
     Write a minimal YOLOv7-compatible data.yaml
     EXACTLY matching:
-      train: /models/task_X/data/images
-      val:   /models/task_X/data/images
+      train: /models/yolov7/task_X/data/images
+      val:   /models/yolov7/task_X/data/images
     """
     data_yaml = dataset_dir / "data.yaml"
 
@@ -50,6 +50,21 @@ def unpack_yolo_dataset(zip_path: Path, data_dir: Path):
         )
 
     log.info("[DATASET] YOLO dataset ready: %s", data_dir)
+
+
+def unpack_yolo_classification_dataset(zip_path: Path, data_dir: Path):
+    """
+    Unpack Ultralytics YOLO Classification ZIP into data_dir.
+    """
+    log.info("[DATASET] Unpacking classification dataset %s into %s", zip_path, data_dir)
+
+    with zipfile.ZipFile(zip_path, "r") as z:
+        z.extractall(data_dir)
+
+    if not any(p.is_dir() for p in data_dir.iterdir()):
+        raise RuntimeError(f"Invalid classification dataset after unzip: {data_dir}")
+
+    log.info("[DATASET] Classification dataset ready: %s", data_dir)
 
 def remove_unlabeled_images(data_dir: Path):
     """

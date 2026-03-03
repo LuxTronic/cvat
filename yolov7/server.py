@@ -30,6 +30,7 @@ logging.basicConfig(level=logging.INFO)
 # ----------------------------
 YOLO_ROOT = Path("/yolov7")
 MODELS_ROOT = Path("/models")
+YOLO_MODELS_ROOT = MODELS_ROOT / "yolov7"
 
 REDIS_HOST = os.environ.get("CVAT_REDIS_INMEM_HOST", "cvat_redis_inmem")
 REDIS_PORT = int(os.environ.get("CVAT_REDIS_INMEM_PORT", "6379"))
@@ -65,7 +66,7 @@ def get_model_for_task(task_id: int) -> torch.nn.Module:
         if task_id in MODEL_CACHE:
             return MODEL_CACHE[task_id]
 
-        weights_path = MODELS_ROOT / f"task_{task_id}" / "active" / "weights" / "best.pt"
+        weights_path = YOLO_MODELS_ROOT / f"task_{task_id}" / "active" / "weights" / "best.pt"
         if not weights_path.exists():
             raise RuntimeError(f"No active model for task {task_id}: {weights_path} does not exist")
 
@@ -102,7 +103,7 @@ def _run_training(cmd, task_id: int):
         subprocess.check_call(cmd, cwd=str(YOLO_ROOT))
         log.info("[YOLO] Training completed for task %s", task_id)
 
-        task_dir = MODELS_ROOT / f"task_{task_id}"
+        task_dir = YOLO_MODELS_ROOT / f"task_{task_id}"
 
         versions = sorted(
             [p for p in task_dir.glob("v*") if p.is_dir()],
@@ -153,7 +154,7 @@ async def infer(image: UploadFile = File(...), task_id: int = 0):
         model = get_model_for_task(task_id)
         infer_lock = _get_infer_lock(task_id)
 
-        weights_path = MODELS_ROOT / f"task_{task_id}" / "active" / "weights" / "best.pt"
+        weights_path = YOLO_MODELS_ROOT / f"task_{task_id}" / "active" / "weights" / "best.pt"
         version = weights_path.parents[2].name  # e.g. v3
         stride = int(model.stride.max())
 
@@ -279,7 +280,7 @@ async def infer(image: UploadFile = File(...), task_id: int = 0):
 def train_task(payload: dict):
     task_id = payload["task_id"]
 
-    task_dir = MODELS_ROOT / f"task_{task_id}"
+    task_dir = YOLO_MODELS_ROOT / f"task_{task_id}"
     data_yaml = task_dir / "data" / "data.yaml"
 
     cmd = [

@@ -1114,6 +1114,12 @@ def put_job_data(pk, data: AnnotationIR | dict, *, db_job: models.Job | None = N
 def patch_job_data(
     pk, data: AnnotationIR | dict, action: PatchAction, *, db_job: models.Job | None = None
 ):
+    def _shape_frames_set(job: models.Job) -> set[int]:
+        return set(job.labeledshape_set.values_list("frame", flat=True))
+
+    def _tag_frames_set(job: models.Job) -> set[int]:
+        return set(job.labeledimage_set.values_list("frame", flat=True))
+
     annotation = JobAnnotation(pk, db_job=db_job)
     if action == PatchAction.CREATE:
         logger.info(
@@ -1121,9 +1127,9 @@ def patch_job_data(
             annotation.db_job.id,
         )
 
-        frames_before = set(
-            annotation.db_job.labeledshape_set.values_list("frame", flat=True)
-        )
+        shape_frames_before = _shape_frames_set(annotation.db_job)
+        tag_frames_before = _tag_frames_set(annotation.db_job)
+        frames_before = shape_frames_before | tag_frames_before
         logger.debug(
             "[ANNOTATION] Job %s frames before save: %s",
             annotation.db_job.id,
@@ -1132,27 +1138,32 @@ def patch_job_data(
 
         annotation.create(data)
 
-        frames_after = set(
-            annotation.db_job.labeledshape_set.values_list("frame", flat=True)
-        )
+        shape_frames_after = _shape_frames_set(annotation.db_job)
+        tag_frames_after = _tag_frames_set(annotation.db_job)
+        frames_after = shape_frames_after | tag_frames_after
         logger.debug(
             "[ANNOTATION] Job %s frames after save: %s",
             annotation.db_job.id,
             sorted(frames_after),
         )
 
-        newly_annotated_frames = frames_after - frames_before
+        newly_shape_frames = shape_frames_after - shape_frames_before
+        newly_tag_frames = tag_frames_after - tag_frames_before
+        newly_annotated_frames = newly_shape_frames | newly_tag_frames
         logger.info(
-            "[ANNOTATION] Job %s newly annotated frames: %s (count=%d)",
+            "[ANNOTATION] Job %s newly annotated frames: %s (count=%d, shape=%d, tag=%d)",
             annotation.db_job.id,
             sorted(newly_annotated_frames),
             len(newly_annotated_frames),
+            len(newly_shape_frames),
+            len(newly_tag_frames),
         )
 
         if newly_annotated_frames:
             handle_new_annotations(
                 job_id=annotation.db_job.id,
-                frames=len(newly_annotated_frames),
+                shape_frames=len(newly_shape_frames),
+                tag_frames=len(newly_tag_frames),
             )
         
     elif action == PatchAction.UPDATE:
