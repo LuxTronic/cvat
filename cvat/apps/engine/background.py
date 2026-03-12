@@ -811,20 +811,50 @@ def run_yolov8cls_inference_frame(
     predictions = response.json()
     log.info("[AUTO-CLASSIFY] Service response | predictions=%d", len(predictions))
 
+    def _normalize_label_name(value: str) -> str:
+        return value.strip().lower().replace("_", " ")
+
     labels = db_job.get_labels()
     label_by_index = {i: l.id for i, l in enumerate(labels)}
+    label_by_name = {_normalize_label_name(l.name): l.id for l in labels}
+
+    log.debug(
+        "[AUTO-CLASSIFY] Label mapping | by_index=%s by_name=%s",
+        label_by_index,
+        {k: v for k, v in label_by_name.items()},
+    )
 
     tags = []
     for pred in predictions:
         class_id = pred.get("class_id")
+        class_name = pred.get("class_name") or pred.get("label") or pred.get("name")
         confidence = float(pred.get("confidence", 0.0))
         if class_id is None or confidence < float(threshold):
             continue
 
-        label_id = label_by_index.get(class_id)
+        label_id = None
+        if isinstance(class_name, str) and class_name.strip():
+            label_id = label_by_name.get(_normalize_label_name(class_name))
+
         if label_id is None:
-            log.warning("[AUTO-CLASSIFY] Unknown class_id=%s for job=%s", class_id, job_id)
+            label_id = label_by_index.get(class_id)
+
+        if label_id is None:
+            log.warning(
+                "[AUTO-CLASSIFY] Unknown prediction label | class_id=%s class_name=%s job=%s",
+                class_id,
+                class_name,
+                job_id,
+            )
             continue
+
+        log.debug(
+            "[AUTO-CLASSIFY] Prediction mapped | class_id=%s class_name=%s confidence=%.4f label_id=%s",
+            class_id,
+            class_name,
+            confidence,
+            label_id,
+        )
 
         tags.append(
             {

@@ -8,6 +8,7 @@ from django.conf import settings
 
 from cvat.apps.engine.models import Task
 
+from .counters import reset
 from .dataset import (
     clear_yolo_cache,
     ensure_data_yaml,
@@ -146,9 +147,10 @@ def retrain_detection_task_model(task_id: int):
         timeout=10,
     )
     resp.raise_for_status()
+    reset(task_id, mode="detection")
 
     log.info(
-        "[TRAINER] YOLOv7 detection training triggered for task %s (service_task_id=%s)",
+        "[TRAINER] YOLOv7 detection training triggered for task %s (service_task_id=%s), counter reset",
         task_id,
         service_task_id,
     )
@@ -171,8 +173,9 @@ def retrain_classification_task_model(task_id: int):
         timeout=10,
     )
     resp.raise_for_status()
+    reset(task_id, mode="classification")
 
-    log.info("[TRAINER] YOLOv8-CLS training triggered for task %s", task_id)
+    log.info("[TRAINER] YOLOv8-CLS training triggered for task %s, counter reset", task_id)
 
 
 def retrain_task_model(task_id: int):
