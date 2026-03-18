@@ -892,3 +892,180 @@ def run_yolov8cls_inference_frame(
         frame,
         len(tags),
     )
+
+
+def run_sam_segmentation_frame(
+    job_id: int,
+    task_id: int,
+    frame: int,
+    *,
+    pos_points: list[list[float]] | None = None,
+    neg_points: list[list[float]] | None = None,
+    bbox: list[list[float]] | list[float] | None = None,
+    label_id: int | None = None,
+    multimask_output: bool = False,
+):
+    import io
+    import json
+    import logging
+    import time
+
+    import numpy as np
+    import requests
+    from PIL import Image
+    from django.conf import settings
+    from django.db import transaction
+
+    from cvat.apps.dataset_manager.task import patch_job_data
+    from cvat.apps.engine.frame_provider import JobFrameProvider
+    from cvat.apps.engine.models import FrameQuality, Job, SourceType
+    from cvat.apps.engine.serializers import LabeledDataSerializer
+
+    log = logging.getLogger(__name__)
+
+    pos_points = pos_points or []
+    neg_points = neg_points or []
+    t_start = time.perf_counter()
+    has_bbox = bbox is not None
+    if not pos_points and not neg_points and not has_bbox:
+        raise serializers.ValidationError(
+            "At least one of pos_points, neg_points, or bbox must be provided"
+        )
+
+    db_job = Job.objects.select_related("segment__task__data").get(pk=job_id)
+    frame_provider = JobFrameProvider(db_job)
+
+    frame_data = frame_provider.get_frame(frame, quality=FrameQuality.ORIGINAL)
+    image_bytes = frame_data.data.getvalue()
+    image = Image.open(io.BytesIO(image_bytes))
+    width, height = image.size
+    t_frame_ready = time.perf_counter()
+
+    labels = db_job.get_labels()
+    if not labels:
+        raise serializers.ValidationError("Job has no labels; cannot create mask annotation")
+
+    if label_id is None:
+        label_id = labels[0].id
+    else:
+        label_id = int(label_id)
+        if label_id not in {l.id for l in labels}:
+            raise serializers.ValidationError(f"label_id={label_id} is not in this job labels")
+
+    log.info(
+        "[SAM] Starting segmentation | job_id=%s task_id=%s frame=%s pos=%d neg=%d bbox=%s label_id=%s",
+        job_id,
+        task_id,
+        frame,
+        len(pos_points),
+        len(neg_points),
+        has_bbox,
+        label_id,
+    )
+
+    sam_url = f"{settings.SAM_SERVICE['URL']}/infer"
+    response = requests.post(
+        sam_url,
+        params={"task_id": task_id},
+        files={"image": ("frame.jpg", image_bytes, frame_data.mime)},
+        data={
+            "pos_points": json.dumps(pos_points),
+            "neg_points": json.dumps(neg_points),
+            "bbox": json.dumps(bbox) if bbox is not None else "",
+            "multimask_output": str(bool(multimask_output)).lower(),
+        },
+        timeout=settings.SAM_SERVICE.get("TIMEOUT", 300),
+    )
+    t_sam_response = time.perf_counter()
+
+    if not response.ok:
+        log.error("[SAM] Inference failed | status=%s body=%s", response.status_code, response.text)
+        try:
+            detail = response.json()
+        except Exception:
+            detail = {"error": response.text}
+        raise serializers.ValidationError(detail)
+
+    data = response.json()
+    t_response_json = time.perf_counter()
+    if "mask" not in data:
+        raise serializers.ValidationError("SAM service response has no 'mask' field")
+
+    mask_np = np.array(data["mask"], dtype=np.uint8)
+    if mask_np.ndim != 2:
+        raise serializers.ValidationError("SAM service mask must be a 2D array")
+    if mask_np.shape[0] != height or mask_np.shape[1] != width:
+        raise serializers.ValidationError(
+            f"SAM mask size mismatch: got {mask_np.shape[1]}x{mask_np.shape[0]}, expected {width}x{height}"
+        )
+    t_validate = time.perf_counter()
+
+    # Convert to binary mask and generate tight bbox for CVAT mask points format.
+    mask_bin = (mask_np > 0).astype(np.uint8)
+    ys, xs = np.where(mask_bin > 0)
+    if xs.size == 0 or ys.size == 0:
+        log.info("[SAM] Empty mask returned | job_id=%s frame=%s", job_id, frame)
+        return
+
+    xtl, ytl = int(xs.min()), int(ys.min())
+    xbr, ybr = int(xs.max()), int(ys.max())
+    tight_mask = mask_bin[ytl : ybr + 1, xtl : xbr + 1]
+
+    flat = tight_mask.reshape(-1)
+    if flat.size == 0:
+        log.info("[SAM] Empty tight mask after crop | job_id=%s frame=%s", job_id, frame)
+        return
+
+    pairwise_unequal = flat[1:] != flat[:-1]
+    rle = np.diff(np.nonzero(pairwise_unequal)[0], prepend=-1, append=flat.size - 1).tolist()
+    if int(flat[0]) != 0:
+        rle.insert(0, 0)
+    rle.extend([xtl, ytl, xbr, ybr])
+
+    payload = {
+        "version": 0,
+        "tags": [],
+        "shapes": [
+            {
+                "type": "mask",
+                "label_id": label_id,
+                "frame": frame,
+                "points": rle,
+                "occluded": False,
+                "outside": False,
+                "attributes": [],
+                "source": str(SourceType.AUTO),
+            }
+        ],
+        "tracks": [],
+    }
+
+    serializer = LabeledDataSerializer(data=payload, context={"annotation_action": "create"})
+    serializer.is_valid(raise_exception=True)
+    t_payload_ready = time.perf_counter()
+
+    with transaction.atomic():
+        patch_job_data(job_id, serializer.validated_data, action="create")
+    t_saved = time.perf_counter()
+
+    log.info(
+        (
+            "[SAM] Mask saved | job_id=%s frame=%s label_id=%s bbox=[%s,%s,%s,%s] "
+            "| timings_ms frame_read=%.1f sam_http=%.1f sam_json=%.1f validate=%.1f "
+            "rle_and_payload=%.1f db_save=%.1f total=%.1f"
+        ),
+        job_id,
+        frame,
+        label_id,
+        xtl,
+        ytl,
+        xbr,
+        ybr,
+        (t_frame_ready - t_start) * 1000,
+        (t_sam_response - t_frame_ready) * 1000,
+        (t_response_json - t_sam_response) * 1000,
+        (t_validate - t_response_json) * 1000,
+        (t_payload_ready - t_validate) * 1000,
+        (t_saved - t_payload_ready) * 1000,
+        (t_saved - t_start) * 1000,
+    )

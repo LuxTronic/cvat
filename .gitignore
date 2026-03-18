@@ -20,7 +20,7 @@ __pycache__
 /temp*/
 
 # Ignore generated test files
-docker-compose.tests.yml    
+docker-compose.tests.yml
 
 # Ignore npm logs file
 npm-debug.log*
@@ -58,6 +58,8 @@ cvat-core/dist
 cvat-canvas/dist
 cvat-canvas3d/dist
 cvat-ui/dist
+
+yolov7/runs
 
 # produced by prepare in the root package.json script
 .husky
@@ -346,3 +348,4 @@ com_crashlytics_export_strings.xml
 crashlytics.properties
 crashlytics-build.properties
 fabric.properties
+sam-service/weights/sam_vit_b_01ec64.pth

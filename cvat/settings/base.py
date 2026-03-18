@@ -374,6 +374,11 @@ YOLOV8CLS_SERVICE = {
     "TIMEOUT": int(os.getenv("CVAT_YOLOV8CLS_SERVICE_TIMEOUT", 300)),
 }
 
+SAM_SERVICE = {
+    "URL": os.getenv("CVAT_SAM_SERVICE_URL", "http://host.docker.internal:8002"),
+    "TIMEOUT": int(os.getenv("CVAT_SAM_SERVICE_TIMEOUT", 300)),
+}
+
 GEMINI = {
     "URL": os.getenv("CVAT_GEMINI_URL", "https://generativelanguage.googleapis.com"),
     "API_KEY": os.getenv("CVAT_GEMINI_API_KEY", ""),
@@ -806,6 +811,5 @@ USER_LAST_ACTIVITY_UPDATE_MIN_INTERVAL = timedelta(days=1)
 
 # Health check settings
 HEALTH_CHECK = {"DISK_USAGE_MAX": int(os.getenv("CVAT_HEALTH_DISK_USAGE_MAX", 90))}
-
 
 

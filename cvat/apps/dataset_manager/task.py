@@ -1115,7 +1115,14 @@ def patch_job_data(
     pk, data: AnnotationIR | dict, action: PatchAction, *, db_job: models.Job | None = None
 ):
     def _shape_frames_set(job: models.Job) -> set[int]:
-        return set(job.labeledshape_set.values_list("frame", flat=True))
+        # Count only human-supervised detection annotations for retraining trigger.
+        # Excludes SAM/auto outputs and segmentation-like shapes (mask/polygon/etc.).
+        return set(
+            job.labeledshape_set.filter(
+                source=str(models.SourceType.MANUAL),
+                type=str(models.ShapeType.RECTANGLE),
+            ).values_list("frame", flat=True)
+        )
 
     def _tag_frames_set(job: models.Job) -> set[int]:
         return set(job.labeledimage_set.values_list("frame", flat=True))

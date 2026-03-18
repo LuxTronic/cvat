@@ -1008,6 +1008,7 @@ class JobPermission(OpenPolicyAgentPermission, DownloadExportedExtension):
             ("annotations", "PUT"): Scopes.UPDATE_ANNOTATIONS,
             ("auto_annotate", "POST"): Scopes.UPDATE_ANNOTATIONS,
             ("auto_classify", "POST"): Scopes.UPDATE_ANNOTATIONS,
+            ("sam_segment", "POST"): Scopes.UPDATE_ANNOTATIONS,
             ("annotations", "POST"): Scopes.IMPORT_ANNOTATIONS,
             ("append_annotations_chunk", "PATCH"): Scopes.UPDATE_ANNOTATIONS,
             ("append_annotations_chunk", "HEAD"): Scopes.UPDATE_ANNOTATIONS,
