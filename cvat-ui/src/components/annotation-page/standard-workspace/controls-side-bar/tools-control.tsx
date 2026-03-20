@@ -165,6 +165,7 @@ interface State {
     pointsReceived: boolean;
     approxPolyAccuracy: number;
     mode: 'detection' | 'interaction' | 'tracking' | 'sam_service';
+    toolsPopoverOpen: boolean;
     portals: React.ReactPortal[];
 }
 
@@ -264,6 +265,7 @@ export class ToolsControlComponent extends React.PureComponent<Props, State> {
             fetching: false,
             pointsReceived: false,
             mode: 'interaction',
+            toolsPopoverOpen: false,
             portals: [],
         };
 
@@ -1420,7 +1422,7 @@ export class ToolsControlComponent extends React.PureComponent<Props, State> {
                             disabled={!activeLabelID || !labels.length || fetching}
                             onClick={() => {
                                 if (activeLabelID && labels.length) {
-                                    this.setState({ mode: 'sam_service' });
+                                    this.setState({ mode: 'sam_service', toolsPopoverOpen: false });
                                     canvasInstance.cancel();
                                     canvasInstance.interact({
                                         shapeType: 'points',
@@ -1495,7 +1497,7 @@ export class ToolsControlComponent extends React.PureComponent<Props, State> {
             interactors, detectors, trackers, isActivated, canvasInstance, labels, frameIsDeleted,
         } = this.props;
         const {
-            fetching, approxPolyAccuracy, pointsReceived, mode, portals, convertMasksToPolygons,
+            fetching, approxPolyAccuracy, pointsReceived, mode, portals, convertMasksToPolygons, toolsPopoverOpen,
         } = this.state;
 
         const samServiceEnabled = true;
@@ -1600,7 +1602,13 @@ export class ToolsControlComponent extends React.PureComponent<Props, State> {
 
         return showAnyContent ? (
             <>
-                <CustomPopover {...dynamicPopoverProps} placement='right' content={this.renderPopoverContent()}>
+                <CustomPopover
+                    {...dynamicPopoverProps}
+                    placement='right'
+                    content={this.renderPopoverContent()}
+                    open={toolsPopoverOpen}
+                    onOpenChange={(open: boolean) => this.setState({ toolsPopoverOpen: open })}
+                >
                     <Icon {...dynamicIconProps} component={AIToolsIcon} />
                 </CustomPopover>
                 {interactionContent}
