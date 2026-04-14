@@ -259,6 +259,12 @@ export default function implementAPI(cvat: CVATCore): CVATCore {
         return Object.assign(jobs, { count: jobsData.count });
     });
 
+    implementationMixin(cvat.jobs.autoAnnotate,
+        async (jobID: number, frame: number): Promise<string> => {
+            return serverProxy.jobs.autoAnnotate(jobID, frame);
+        },
+    );
+
     implementationMixin(cvat.tasks.get, async (
         filter: Parameters<CVATCore['tasks']['get']>[0],
         aggregate: Parameters<CVATCore['tasks']['get']>[1],

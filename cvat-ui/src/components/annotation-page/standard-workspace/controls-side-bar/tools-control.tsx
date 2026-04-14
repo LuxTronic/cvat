@@ -40,6 +40,7 @@ import {
     fetchAnnotationsAsync,
     updateAnnotationsAsync,
     createAnnotationsAsync,
+    changeFrameAsync,
 } from 'actions/annotation-actions';
 import DetectorRunner, { AnnotateTaskRequestBody } from 'components/model-runner-modal/detector-runner';
 import LabelSelector from 'components/label-selector/label-selector';
@@ -75,6 +76,7 @@ interface DispatchToProps {
     updateAnnotations: (states: ObjectState[]) => Promise<void>;
     createAnnotations: (states: ObjectState[]) => Promise<void>;
     fetchAnnotations: () => Promise<void>;
+    changeFrame: (frame: number, fillBuffer?: boolean, frameStep?: number, forceReload?: boolean) => void;
     onInteractionStart: typeof interactWithCanvas;
     onSwitchToolsBlockerState: typeof switchToolsBlockerState;
     switchNavigationBlocked: typeof switchNavigationBlockedAction;
@@ -139,6 +141,7 @@ const mapDispatchToProps = {
     updateAnnotations: updateAnnotationsAsync,
     createAnnotations: createAnnotationsAsync,
     fetchAnnotations: fetchAnnotationsAsync,
+    changeFrame: changeFrameAsync,
     onSwitchToolsBlockerState: switchToolsBlockerState,
     switchNavigationBlocked: switchNavigationBlockedAction,
 };
@@ -161,7 +164,8 @@ interface State {
     fetching: boolean;
     pointsReceived: boolean;
     approxPolyAccuracy: number;
-    mode: 'detection' | 'interaction' | 'tracking';
+    mode: 'detection' | 'interaction' | 'tracking' | 'sam_service';
+    toolsPopoverOpen: boolean;
     portals: React.ReactPortal[];
 }
 
@@ -261,6 +265,7 @@ export class ToolsControlComponent extends React.PureComponent<Props, State> {
             fetching: false,
             pointsReceived: false,
             mode: 'interaction',
+            toolsPopoverOpen: false,
             portals: [],
         };
 
@@ -587,8 +592,90 @@ export class ToolsControlComponent extends React.PureComponent<Props, State> {
             await this.onInteraction(e);
         }
 
+        if (mode === 'sam_service') {
+            if (toolsBlockerState.algorithmsLocked) {
+                return;
+            }
+
+            await this.onSAMServiceInteraction(e);
+        }
+
         if (mode === 'tracking') {
             await this.onTracking(e);
+        }
+    };
+
+    private onSAMServiceInteraction = async (e: Event): Promise<void> => {
+        const { activeLabelID, fetching } = this.state;
+        const {
+            jobInstance, frame, fetchAnnotations, changeFrame,
+        } = this.props;
+
+        if (!activeLabelID || fetching) {
+            return;
+        }
+
+        const { isDone, shapes } = (e as CustomEvent).detail;
+        // Submit SAM request only when user explicitly finishes interaction.
+        if (!isDone) {
+            return;
+        }
+
+        const posPoints = convertShapesForInteractor(shapes, 'points', 0);
+        const negPoints = convertShapesForInteractor(shapes, 'points', 2);
+        const bboxPoints = convertShapesForInteractor(shapes, 'rectangle', 0);
+        const bbox = bboxPoints.length >= 2 ? [bboxPoints[0], bboxPoints[1]] : null;
+
+        if (!posPoints.length && !negPoints.length && !bbox) {
+            notification.warning({
+                message: 'SAM prompt is empty',
+                description: 'Add foreground/background points or a bounding box first.',
+            });
+            this.setState({ mode: 'interaction' });
+            return;
+        }
+
+        try {
+            this.setState({ fetching: true });
+            await core.server.request(`/api/jobs/${jobInstance.id}/sam-segment`, {
+                method: 'POST',
+                params: {
+                    frame,
+                    label_id: activeLabelID,
+                },
+                data: {
+                    pos_points: posPoints,
+                    neg_points: negPoints,
+                    bbox,
+                },
+            });
+            await jobInstance.annotations.clear({ reload: true });
+            changeFrame(frame, false, undefined, true);
+            await fetchAnnotations();
+            message.success('SAM mask created');
+        } catch (error: any) {
+            notification.error({
+                description: <CVATMarkdown>{error.message}</CVATMarkdown>,
+                message: 'SAM service error occurred',
+                duration: null,
+            });
+        } finally {
+            this.setState({ fetching: false, mode: 'interaction' });
+        }
+    };
+
+    private finishSAMServiceInteraction = (): void => {
+        const { canvasInstance } = this.props;
+        if (!this.state.fetching) {
+            canvasInstance.interact({ enabled: false });
+        }
+    };
+
+    private cancelSAMServiceInteraction = (): void => {
+        const { canvasInstance } = this.props;
+        if (!this.state.fetching) {
+            canvasInstance.cancel();
+            this.setState({ mode: 'interaction' });
         }
     };
 
@@ -1301,6 +1388,60 @@ export class ToolsControlComponent extends React.PureComponent<Props, State> {
         );
     }
 
+    private renderSAMServiceBlock(): JSX.Element {
+        const {
+            canvasInstance, labels,
+        } = this.props;
+        const {
+            activeLabelID, fetching, startInteractingWithBox,
+        } = this.state;
+
+        return (
+            <>
+                <Row justify='start'>
+                    <Col>
+                        <Text className='cvat-text-color'>
+                            Use foreground/background points and optional bounding box, then finish interaction to generate a mask.
+                        </Text>
+                    </Col>
+                </Row>
+                <div className='cvat-tools-interactor-setups'>
+                    <div>
+                        <Switch
+                            checked={startInteractingWithBox}
+                            onChange={(value: boolean) => this.setState({ startInteractingWithBox: value })}
+                        />
+                        <Text>Start with a bounding box</Text>
+                    </div>
+                </div>
+                <Row align='middle' justify='end'>
+                    <Col>
+                        <Button
+                            type='primary'
+                            loading={fetching}
+                            disabled={!activeLabelID || !labels.length || fetching}
+                            onClick={() => {
+                                if (activeLabelID && labels.length) {
+                                    this.setState({ mode: 'sam_service', toolsPopoverOpen: false });
+                                    canvasInstance.cancel();
+                                    canvasInstance.interact({
+                                        shapeType: 'points',
+                                        enabled: true,
+                                        minPosVertices: 0,
+                                        minNegVertices: 0,
+                                        startWithBox: startInteractingWithBox,
+                                    });
+                                }
+                            }}
+                        >
+                            Segment with SAM Service
+                        </Button>
+                    </Col>
+                </Row>
+            </>
+        );
+    }
+
     private renderPopoverContent(): JSX.Element {
         return (
             <div className='cvat-tools-control-popover-content'>
@@ -1315,6 +1456,15 @@ export class ToolsControlComponent extends React.PureComponent<Props, State> {
                     type='card'
                     tabBarGutter={8}
                     items={[{
+                        key: 'sam-service',
+                        label: 'SAM Service',
+                        children: (
+                            <>
+                                {this.renderLabelBlock()}
+                                {this.renderSAMServiceBlock()}
+                            </>
+                        ),
+                    }, {
                         key: 'interactors',
                         label: 'Interactors',
                         children: (
@@ -1347,10 +1497,11 @@ export class ToolsControlComponent extends React.PureComponent<Props, State> {
             interactors, detectors, trackers, isActivated, canvasInstance, labels, frameIsDeleted,
         } = this.props;
         const {
-            fetching, approxPolyAccuracy, pointsReceived, mode, portals, convertMasksToPolygons,
+            fetching, approxPolyAccuracy, pointsReceived, mode, portals, convertMasksToPolygons, toolsPopoverOpen,
         } = this.state;
 
-        if (![...interactors, ...detectors, ...trackers].length) return null;
+        const samServiceEnabled = true;
+        if (![...interactors, ...detectors, ...trackers].length && !samServiceEnabled) return null;
 
         const dynamicPopoverProps = isActivated ?
             {
@@ -1374,6 +1525,7 @@ export class ToolsControlComponent extends React.PureComponent<Props, State> {
         const showAnyContent = labels.length && !frameIsDeleted;
         const showInteractionContent = isActivated && mode === 'interaction' && pointsReceived && convertMasksToPolygons;
         const showDetectionContent = fetching && mode === 'detection';
+        const showSAMServiceContent = mode === 'sam_service';
 
         const interactionContent: JSX.Element | null = showInteractionContent ? (
             <ApproximationAccuracy
@@ -1398,13 +1550,70 @@ export class ToolsControlComponent extends React.PureComponent<Props, State> {
             </Modal>
         ) : null;
 
+        const samServiceContent: JSX.Element | null = showSAMServiceContent ? (
+            <div
+                style={{
+                    position: 'fixed',
+                    top: 16,
+                    right: 16,
+                    zIndex: Number.MAX_SAFE_INTEGER,
+                    pointerEvents: 'none',
+                }}
+            >
+                <div
+                    style={{
+                        width: 360,
+                        background: '#fff',
+                        border: '1px solid #d9d9d9',
+                        borderRadius: 8,
+                        boxShadow: '0 8px 24px rgba(0, 0, 0, 0.2)',
+                        padding: 12,
+                        pointerEvents: 'auto',
+                    }}
+                >
+                    <Text strong>SAM Prompt Interaction</Text>
+                    <div style={{ marginTop: 8 }}>
+                        <Text>Left-click adds foreground points. Right-click adds background points.</Text>
+                        <br />
+                        <Text>Click Done to submit prompts and generate the SAM mask.</Text>
+                    </div>
+                    <Row justify='end' gutter={8} style={{ marginTop: 12 }}>
+                        <Col>
+                            <Button
+                                onClick={this.cancelSAMServiceInteraction}
+                                disabled={fetching}
+                            >
+                                Cancel
+                            </Button>
+                        </Col>
+                        <Col>
+                            <Button
+                                type='primary'
+                                onClick={this.finishSAMServiceInteraction}
+                                loading={fetching}
+                            >
+                                Done
+                            </Button>
+                        </Col>
+                    </Row>
+                </div>
+            </div>
+        ) : null;
+
         return showAnyContent ? (
             <>
-                <CustomPopover {...dynamicPopoverProps} placement='right' content={this.renderPopoverContent()}>
+                <CustomPopover
+                    {...dynamicPopoverProps}
+                    placement='right'
+                    content={this.renderPopoverContent()}
+                    open={toolsPopoverOpen}
+                    onOpenChange={(open: boolean) => this.setState({ toolsPopoverOpen: open })}
+                >
                     <Icon {...dynamicIconProps} component={AIToolsIcon} />
                 </CustomPopover>
                 {interactionContent}
                 {detectionContent}
+                {samServiceContent}
                 {portals}
             </>
         ) : (

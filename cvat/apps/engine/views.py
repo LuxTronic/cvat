@@ -5,6 +5,7 @@
 
 import itertools
 import os
+from rq.job import JobStatus
 import os.path as osp
 import shutil
 import textwrap
@@ -1882,6 +1883,173 @@ class JobViewSet(viewsets.GenericViewSet, mixins.ListModelMixin, mixins.CreateMo
                 except (AttributeError, IntegrityError) as e:
                     return Response(data=str(e), status=status.HTTP_400_BAD_REQUEST)
                 return Response(data)
+    @extend_schema(
+        methods=["POST"],
+        summary="Generate inference using YOLOv7 service",
+        parameters=[
+            OpenApiParameter(
+                'frame',
+                location=OpenApiParameter.QUERY,
+                type=OpenApiTypes.INT,
+                required=True,
+                description='Frame number to process',
+            ),
+        ],
+        responses={
+            '202': OpenApiResponse(RqIdSerializer),
+            '409': OpenApiResponse(description='Inference already running'),
+        },
+    )
+    @action(detail=True, methods=["POST"], url_path="auto-annotate")
+    def auto_annotate(self, request: ExtendedRequest, pk: int):
+        from cvat.apps.engine.background import run_yolov7_inference_frame
+
+        db_job = self.get_object()
+
+        frame = request.query_params.get("frame")
+        if frame is None:
+            raise ValidationError("frame is required")
+
+        frame = int(frame)
+
+        task_id = db_job.segment.task.data.id
+        
+        # Run inference synchronously
+        run_yolov7_inference_frame(
+            job_id=db_job.id,
+            task_id=task_id,
+            frame=frame,
+        )
+
+        return Response(status=200)
+
+    @extend_schema(
+        methods=["POST"],
+        summary="Generate classification tags using YOLOv8-CLS service",
+        parameters=[
+            OpenApiParameter(
+                "frame",
+                location=OpenApiParameter.QUERY,
+                type=OpenApiTypes.INT,
+                required=True,
+                description="Frame number to process",
+            ),
+            OpenApiParameter(
+                "threshold",
+                location=OpenApiParameter.QUERY,
+                type=OpenApiTypes.FLOAT,
+                required=False,
+                description="Minimum confidence threshold for predicted classes",
+            ),
+            OpenApiParameter(
+                "topk",
+                location=OpenApiParameter.QUERY,
+                type=OpenApiTypes.INT,
+                required=False,
+                description="Number of top classes to keep",
+            ),
+        ],
+    )
+    @action(detail=True, methods=["POST"], url_path="auto-classify")
+    def auto_classify(self, request: ExtendedRequest, pk: int):
+        from cvat.apps.engine.background import run_yolov8cls_inference_frame
+
+        db_job = self.get_object()
+
+        frame = request.query_params.get("frame")
+        if frame is None:
+            raise ValidationError("frame is required")
+
+        threshold = float(request.query_params.get("threshold", 0.0))
+        topk = int(request.query_params.get("topk", 1))
+
+        run_yolov8cls_inference_frame(
+            job_id=db_job.id,
+            task_id=db_job.segment.task.id,
+            frame=int(frame),
+            threshold=threshold,
+            topk=topk,
+        )
+
+        return Response(status=200)
+
+    @extend_schema(
+        methods=["POST"],
+        summary="Generate interactive SAM segmentation mask for a frame",
+        parameters=[
+            OpenApiParameter(
+                "frame",
+                location=OpenApiParameter.QUERY,
+                type=OpenApiTypes.INT,
+                required=True,
+                description="Frame number to process",
+            ),
+            OpenApiParameter(
+                "label_id",
+                location=OpenApiParameter.QUERY,
+                type=OpenApiTypes.INT,
+                required=False,
+                description="Optional label id to assign to created mask (defaults to first job label)",
+            ),
+            OpenApiParameter(
+                "multimask_output",
+                location=OpenApiParameter.QUERY,
+                type=OpenApiTypes.BOOL,
+                required=False,
+                description="Ask SAM service for multi-mask output and pick best score",
+            ),
+        ],
+    )
+    @action(detail=True, methods=["POST"], url_path="sam-segment")
+    def sam_segment(self, request: ExtendedRequest, pk: int):
+        import json
+
+        from cvat.apps.engine.background import run_sam_segmentation_frame
+
+        db_job = self.get_object()
+
+        frame = request.query_params.get("frame")
+        if frame is None:
+            raise ValidationError("frame is required")
+
+        label_id = request.query_params.get("label_id")
+        multimask_output_raw = request.query_params.get("multimask_output", "false")
+        multimask_output = str(multimask_output_raw).strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "y",
+            "on",
+        }
+
+        def _load_json_if_needed(value):
+            if isinstance(value, str):
+                stripped = value.strip()
+                if not stripped:
+                    return None
+                return json.loads(stripped)
+            return value
+
+        pos_points = request.data.get("pos_points", [])
+        neg_points = request.data.get("neg_points", [])
+        bbox = request.data.get("bbox")
+        pos_points = _load_json_if_needed(pos_points) or []
+        neg_points = _load_json_if_needed(neg_points) or []
+        bbox = _load_json_if_needed(bbox)
+
+        run_sam_segmentation_frame(
+            job_id=db_job.id,
+            task_id=db_job.segment.task.id,
+            frame=int(frame),
+            pos_points=pos_points,
+            neg_points=neg_points,
+            bbox=bbox,
+            label_id=(int(label_id) if label_id is not None else None),
+            multimask_output=multimask_output,
+        )
+
+        return Response(status=200)
+
 
 
     @tus_chunk_action(detail=True, suffix_base="annotations")

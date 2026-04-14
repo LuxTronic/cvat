@@ -20,10 +20,12 @@ from rq.job import Dependency as RQDependency
 from rq.job import Job as RQJob
 from rq.registry import BaseRegistry as RQBaseRegistry
 
+
 from cvat.apps.engine.types import ExtendedRequest
 from cvat.apps.engine.utils import take_by
 from cvat.apps.redis_handler.apps import SELECTOR_TO_QUEUE
 from cvat.apps.redis_handler.rq import RequestId, RequestIdWithOptionalSubresource
+from cvat.apps.engine.models import RequestAction, RequestTarget
 
 if TYPE_CHECKING:
     from django.contrib.auth.models import User
@@ -372,6 +374,26 @@ class ExportRequestId(
     )
 
 
+
+@attrs.frozen(kw_only=True, slots=False)
+class AutoAnnotateRequestId(RequestId):
+    ACTION_ALLOWED_VALUES = (
+        RequestAction.AUTOANNOTATE.value,
+        RequestAction.GPTANNOTATE.value,
+    )
+
+    TARGET_ALLOWED_VALUES = (
+        RequestTarget.TASK.value,
+        RequestTarget.JOB.value,
+    )
+
+    QUEUE_SELECTORS = [
+    (RequestAction.AUTOANNOTATE, RequestTarget.TASK),
+    (RequestAction.AUTOANNOTATE, RequestTarget.JOB),
+    (RequestAction.GPTANNOTATE, RequestTarget.TASK),
+    RequestAction.GPTANNOTATE,   # <-- ADD THIS
+    ]
+
 @attrs.frozen(kw_only=True, slots=False)
 class ImportRequestId(
     RequestIdWithOptionalSubresource,  # subresource is optional because import queue works also with task creation jobs
@@ -387,7 +409,6 @@ class ImportRequestId(
         r"(?P<action>import):(?P<target>(task|project|job))-(?P<target_id>\d+)-(?P<subresource>(annotations|dataset))",
         r"(?P<action>import):(?P<target>(task|project))-(?P<id>[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12})-(?P<subresource>backup)",
     )
-
 
 def define_dependent_job(
     queue: DjangoRQ,
@@ -513,3 +534,5 @@ def update_org_related_data_in_rq_jobs(
         # FUTURE-TODO: probably need to move it into a background process
         # and update RQ jobs in batches with rollback support.
         pipe.execute()  # it handles empty pipe.command_stack too
+
+

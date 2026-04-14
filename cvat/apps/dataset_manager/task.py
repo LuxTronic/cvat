@@ -10,8 +10,9 @@ from collections.abc import Callable
 from contextlib import nullcontext
 from copy import deepcopy
 from enum import Enum
-
+from cvat.apps.engine.training.annotation_hook import handle_new_annotations
 from datumaro.components.errors import DatasetError, DatasetImportError, DatasetNotFoundError
+import logging
 from django.conf import settings
 from django.db import transaction
 from django.db.models.query import Prefetch, QuerySet
@@ -36,6 +37,7 @@ from cvat.apps.profiler import silk_profile
 
 dlogger = DatasetLogManager()
 
+logger = logging.getLogger(__name__)
 
 class dotdict(OrderedDict):
     """dot.notation access to dictionary attributes"""
@@ -452,7 +454,6 @@ class JobAnnotation:
 
     def create(self, data):
         data = self._validate_input_annotations(data)
-
         self._create(data)
         handle_annotations_change(self.db_job, self.data, "create")
 
@@ -1113,9 +1114,65 @@ def put_job_data(pk, data: AnnotationIR | dict, *, db_job: models.Job | None = N
 def patch_job_data(
     pk, data: AnnotationIR | dict, action: PatchAction, *, db_job: models.Job | None = None
 ):
+    def _shape_frames_set(job: models.Job) -> set[int]:
+        # Count only human-supervised detection annotations for retraining trigger.
+        # Excludes SAM/auto outputs and segmentation-like shapes (mask/polygon/etc.).
+        return set(
+            job.labeledshape_set.filter(
+                source=str(models.SourceType.MANUAL),
+                type=str(models.ShapeType.RECTANGLE),
+            ).values_list("frame", flat=True)
+        )
+
+    def _tag_frames_set(job: models.Job) -> set[int]:
+        return set(job.labeledimage_set.values_list("frame", flat=True))
+
     annotation = JobAnnotation(pk, db_job=db_job)
     if action == PatchAction.CREATE:
+        logger.info(
+            "[ANNOTATION] Job %s CREATE request received",
+            annotation.db_job.id,
+        )
+
+        shape_frames_before = _shape_frames_set(annotation.db_job)
+        tag_frames_before = _tag_frames_set(annotation.db_job)
+        frames_before = shape_frames_before | tag_frames_before
+        logger.debug(
+            "[ANNOTATION] Job %s frames before save: %s",
+            annotation.db_job.id,
+            sorted(frames_before),
+        )
+
         annotation.create(data)
+
+        shape_frames_after = _shape_frames_set(annotation.db_job)
+        tag_frames_after = _tag_frames_set(annotation.db_job)
+        frames_after = shape_frames_after | tag_frames_after
+        logger.debug(
+            "[ANNOTATION] Job %s frames after save: %s",
+            annotation.db_job.id,
+            sorted(frames_after),
+        )
+
+        newly_shape_frames = shape_frames_after - shape_frames_before
+        newly_tag_frames = tag_frames_after - tag_frames_before
+        newly_annotated_frames = newly_shape_frames | newly_tag_frames
+        logger.info(
+            "[ANNOTATION] Job %s newly annotated frames: %s (count=%d, shape=%d, tag=%d)",
+            annotation.db_job.id,
+            sorted(newly_annotated_frames),
+            len(newly_annotated_frames),
+            len(newly_shape_frames),
+            len(newly_tag_frames),
+        )
+
+        if newly_annotated_frames:
+            handle_new_annotations(
+                job_id=annotation.db_job.id,
+                shape_frames=len(newly_shape_frames),
+                tag_frames=len(newly_tag_frames),
+            )
+        
     elif action == PatchAction.UPDATE:
         annotation.update(data)
     elif action == PatchAction.DELETE:

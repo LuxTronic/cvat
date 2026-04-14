@@ -278,6 +278,7 @@ class CVAT_QUEUES(Enum):
     CONSENSUS = "consensus"
 
 
+
 redis_inmem_host = os.getenv("CVAT_REDIS_INMEM_HOST", "localhost")
 redis_inmem_port = os.getenv("CVAT_REDIS_INMEM_PORT", 6379)
 redis_inmem_password = os.getenv("CVAT_REDIS_INMEM_PASSWORD", "")
@@ -311,6 +312,7 @@ RQ_QUEUES = {
     CVAT_QUEUES.AUTO_ANNOTATION.value: {
         **REDIS_INMEM_SETTINGS,
         "DEFAULT_TIMEOUT": "24h",
+        "PARSED_JOB_ID_CLASS": "cvat.apps.engine.rq.AutoAnnotateRequestId",
     },
     CVAT_QUEUES.WEBHOOKS.value: {
         **REDIS_INMEM_SETTINGS,
@@ -361,6 +363,29 @@ RQ_EXCEPTION_HANDLERS = [
     "cvat.apps.engine.views.rq_exception_handler",
     "cvat.apps.events.handlers.handle_rq_exception",
 ]
+
+YOLOV7_SERVICE = {
+    "URL": os.getenv("CVAT_YOLOV7_SERVICE_URL", "http://host.docker.internal:8000"),
+    "TIMEOUT": int(os.getenv("CVAT_YOLOV7_SERVICE_TIMEOUT", 300)),
+}
+
+YOLOV8CLS_SERVICE = {
+    "URL": os.getenv("CVAT_YOLOV8CLS_SERVICE_URL", "http://host.docker.internal:8001"),
+    "TIMEOUT": int(os.getenv("CVAT_YOLOV8CLS_SERVICE_TIMEOUT", 300)),
+}
+
+SAM_SERVICE = {
+    "URL": os.getenv("CVAT_SAM_SERVICE_URL", "http://host.docker.internal:8002"),
+    "TIMEOUT": int(os.getenv("CVAT_SAM_SERVICE_TIMEOUT", 300)),
+}
+
+GEMINI = {
+    "URL": os.getenv("CVAT_GEMINI_URL", "https://generativelanguage.googleapis.com"),
+    "API_KEY": os.getenv("CVAT_GEMINI_API_KEY", ""),
+    "MODEL": os.getenv("CVAT_GEMINI_MODEL", "gemini-3-flash-preview"),
+    "TIMEOUT": int(os.getenv("CVAT_GEMINI_TIMEOUT", 500)),
+    "MAX_CONTEXT_FRAMES": int(os.getenv("CVAT_GEMINI_MAX_CONTEXT_FRAMES", 1)),
+}
 
 PERIODIC_RQ_JOBS = [
     {
@@ -786,3 +811,5 @@ USER_LAST_ACTIVITY_UPDATE_MIN_INTERVAL = timedelta(days=1)
 
 # Health check settings
 HEALTH_CHECK = {"DISK_USAGE_MAX": int(os.getenv("CVAT_HEALTH_DISK_USAGE_MAX", 90))}
+
+
