@@ -36,6 +36,7 @@ import { getRequestsAsync } from 'actions/requests-async-actions';
 import { getServerAPISchemaAsync } from 'actions/server-actions';
 import { navigationActions } from 'actions/navigation-actions';
 import { CombinedState, NotificationsState, PluginsState } from './reducers';
+import { getUIBasePath } from './utils/base-path';
 import './utils/dayjs-wrapper';
 
 createCVATStore(createRootReducer);
@@ -150,11 +151,12 @@ function mapDispatchToProps(dispatch: any): DispatchToProps {
 }
 
 const ReduxAppWrapper = connect(mapStateToProps, mapDispatchToProps)(CVATApplication);
+const uiBasePath = getUIBasePath() || undefined;
 
 const root = createRoot(document.getElementById('root') as HTMLDivElement);
 root.render((
     <Provider store={cvatStore}>
-        <BrowserRouter>
+        <BrowserRouter basename={uiBasePath}>
             <PluginsEntrypoint />
             <ReduxAppWrapper />
         </BrowserRouter>

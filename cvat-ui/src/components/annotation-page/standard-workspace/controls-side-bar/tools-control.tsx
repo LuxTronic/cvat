@@ -46,6 +46,7 @@ import DetectorRunner, { AnnotateTaskRequestBody } from 'components/model-runner
 import LabelSelector from 'components/label-selector/label-selector';
 import CVATTooltip from 'components/common/cvat-tooltip';
 import CVATMarkdown from 'components/common/cvat-markdown';
+import { withUIBasePath } from 'utils/base-path';
 
 import ApproximationAccuracy, {
     thresholdFromAccuracy,
@@ -637,7 +638,7 @@ export class ToolsControlComponent extends React.PureComponent<Props, State> {
 
         try {
             this.setState({ fetching: true });
-            await core.server.request(`/api/jobs/${jobInstance.id}/sam-segment`, {
+            await core.server.request(withUIBasePath(`/api/jobs/${jobInstance.id}/sam-segment`), {
                 method: 'POST',
                 params: {
                     frame,

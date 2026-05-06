@@ -18,6 +18,7 @@ import { getCore, AnnotationGuide } from 'cvat-core-wrapper';
 import CVATLoadingSpinner from 'components/common/loading-spinner';
 import GoBackButton from 'components/common/go-back-button';
 import dimensions from 'utils/dimensions';
+import { withUIBasePath } from 'utils/base-path';
 
 const core = getCore();
 
@@ -83,9 +84,9 @@ function AnnotationGuidePage(): JSX.Element {
             const computeNewValue = (): string => {
                 const addedStrings = addedAssets.map(([file, uuid]) => {
                     if (file.type.startsWith('image/')) {
-                        return (`![image](/api/assets/${uuid})`);
+                        return (`![image](${withUIBasePath(`/api/assets/${uuid}`)})`);
                     }
-                    return (`[${file.name}](/api/assets/${uuid})`);
+                    return (`[${file.name}](${withUIBasePath(`/api/assets/${uuid}`)})`);
                 });
 
                 const stringsToAdd = assetsToAdd.map((file: File) => {

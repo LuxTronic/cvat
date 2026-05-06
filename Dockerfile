@@ -3,7 +3,15 @@ ARG BASE_IMAGE=ubuntu:22.04
 
 FROM ${BASE_IMAGE} AS build-image-base
 
-RUN apt-get update && \
+RUN set -eux; \
+    for attempt in 1 2 3 4 5; do \
+        apt-get update && break; \
+        status=$?; \
+        echo "apt-get update failed (attempt ${attempt}), retrying..." >&2; \
+        rm -rf /var/lib/apt/lists/*; \
+        if [ "${attempt}" -eq 5 ]; then exit "${status}"; fi; \
+        sleep 5; \
+    done; \
     DEBIAN_FRONTEND=noninteractive apt-get --no-install-recommends install -yq \
         curl \
         g++ \
@@ -112,7 +120,15 @@ ARG CVAT_CONFIGURATION="production"
 ENV DJANGO_SETTINGS_MODULE="cvat.settings.${CVAT_CONFIGURATION}"
 
 # Install necessary apt packages
-RUN apt-get update && \
+RUN set -eux; \
+    for attempt in 1 2 3 4 5; do \
+        apt-get update && break; \
+        status=$?; \
+        echo "apt-get update failed (attempt ${attempt}), retrying..." >&2; \
+        rm -rf /var/lib/apt/lists/*; \
+        if [ "${attempt}" -eq 5 ]; then exit "${status}"; fi; \
+        sleep 5; \
+    done; \
     DEBIAN_FRONTEND=noninteractive apt-get --no-install-recommends install -yq \
         bzip2 \
         ca-certificates \
@@ -150,7 +166,15 @@ RUN adduser --uid=1000 --shell /bin/bash --disabled-password --gecos "" ${USER}
 
 ARG CLAM_AV="no"
 RUN if [ "$CLAM_AV" = "yes" ]; then \
-        apt-get update && \
+        set -eux; \
+        for attempt in 1 2 3 4 5; do \
+            apt-get update && break; \
+            status=$?; \
+            echo "apt-get update failed (attempt ${attempt}), retrying..." >&2; \
+            rm -rf /var/lib/apt/lists/*; \
+            if [ "${attempt}" -eq 5 ]; then exit "${status}"; fi; \
+            sleep 5; \
+        done; \
         apt-get --no-install-recommends install -yq \
             clamav \
             libclamunrar9 && \

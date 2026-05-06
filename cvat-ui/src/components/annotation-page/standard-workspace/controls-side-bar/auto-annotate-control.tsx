@@ -1,8 +1,9 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import Button from 'antd/lib/button';
 import Popover from 'antd/lib/popover';
 import Input from 'antd/lib/input';
+import Select from 'antd/lib/select';
 import message from 'antd/lib/message';
 import { RobotOutlined } from '@ant-design/icons';
 import Typography from 'antd/lib/typography';
@@ -16,6 +17,7 @@ import { registerComponentShortcuts } from 'actions/shortcuts-actions';
 import { ShortcutScope } from 'utils/enums';
 import { subKeyMap } from 'utils/component-subkeymap';
 import CVATTooltip from 'components/common/cvat-tooltip';
+import { withUIBasePath } from 'utils/base-path';
 import withVisibilityHandling from './handle-popover-visibility';
 
 const { Text } = Typography;
@@ -52,6 +54,9 @@ function AutoAnnotateControlComponent(): JSX.Element {
         normalizedKeyMap: state.shortcuts.normalizedKeyMap,
     }));
     const [loading, setLoading] = useState(false);
+    const [modelOptionsLoading, setModelOptionsLoading] = useState(false);
+    const [modelOptions, setModelOptions] = useState<any[]>([]);
+    const [selectedModelID, setSelectedModelID] = useState('');
     const [modelPrompt, setModelPrompt] = useState('');
     const [contextFrameText, setContextFrameText] = useState('');
     const labelNames = useMemo(
@@ -60,6 +65,57 @@ function AutoAnnotateControlComponent(): JSX.Element {
             .filter((name: string): boolean => Boolean(name.length)),
         [labels],
     );
+    const selectedModel = useMemo(
+        () => modelOptions.find((model: any): boolean => model?.id === selectedModelID),
+        [modelOptions, selectedModelID],
+    );
+
+    useEffect(() => {
+        let cancelled = false;
+
+        async function loadModelOptions(): Promise<void> {
+            if (!jobInstance?.id) {
+                setModelOptions([]);
+                setSelectedModelID('');
+                return;
+            }
+
+            setModelOptionsLoading(true);
+            try {
+                const response = await core.server.request(
+                    withUIBasePath(`/api/jobs/${jobInstance.id}/auto-annotate-models`),
+                    {
+                        method: 'GET',
+                    },
+                );
+
+                if (!cancelled) {
+                    const models = response?.data?.models || [];
+                    setModelOptions(models);
+                    setSelectedModelID((current): string => (
+                        current && models.some((model: any): boolean => model?.id === current) ?
+                            current :
+                            ''
+                    ));
+                }
+            } catch {
+                if (!cancelled) {
+                    setModelOptions([]);
+                    setSelectedModelID('');
+                }
+            } finally {
+                if (!cancelled) {
+                    setModelOptionsLoading(false);
+                }
+            }
+        }
+
+        void loadModelOptions();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [jobInstance?.id]);
 
     const parseContextFrame = useCallback((): number[] | null => {
         const trimmed = contextFrameText.trim();
@@ -94,16 +150,25 @@ function AutoAnnotateControlComponent(): JSX.Element {
                 await jobInstance.annotations.save();
             }
 
+            const params: Record<string, string | number> = { frame };
+            if (selectedModelID) {
+                params.model_id = selectedModelID;
+            }
+
             await core.server.request(
-                `/api/jobs/${jobInstance.id}/auto-annotate`,
+                withUIBasePath(`/api/jobs/${jobInstance.id}/auto-annotate`),
                 {
                     method: 'POST',
-                    params: { frame },
+                    params,
                 },
             );
 
             await reloadAnnotations();
-            message.success('Inference completed successfully');
+            message.success(
+                selectedModel?.name ?
+                    `Inference completed with ${selectedModel.name}` :
+                    'Inference completed successfully',
+            );
         } catch (error: any) {
             message.error(
                 error?.response?.data?.detail ||
@@ -120,6 +185,8 @@ function AutoAnnotateControlComponent(): JSX.Element {
         jobInstance,
         loading,
         reloadAnnotations,
+        selectedModel,
+        selectedModelID,
     ]);
 
     const handleModelAnnotate = useCallback(async () => {
@@ -138,18 +205,18 @@ function AutoAnnotateControlComponent(): JSX.Element {
                 await jobInstance.annotations.save();
             }
 
-           const response = await core.server.request(
-    '/api/model/annotate',
-    {
-        method: 'POST',
-        data: {
-            task_id: jobInstance.taskId,
-            frame_ids: [frame],
-            context_frame_ids: contextFrameIds,
-            prompt: modelPrompt.trim(),
-        },
-    },
-);
+            const response = await core.server.request(
+                withUIBasePath('/api/model/annotate'),
+                {
+                    method: 'POST',
+                    data: {
+                        task_id: jobInstance.taskId,
+                        frame_ids: [frame],
+                        context_frame_ids: contextFrameIds,
+                        prompt: modelPrompt.trim(),
+                    },
+                },
+            );
 
 
             const rqID = response?.data?.rq_id;
@@ -215,6 +282,20 @@ function AutoAnnotateControlComponent(): JSX.Element {
             <div style={{ textAlign: 'center' }}>
                 <Text>Generate inference for current frame</Text>
                 <br /><br />
+                <Select
+                    value={selectedModelID}
+                    onChange={(value: string): void => setSelectedModelID(value)}
+                    loading={modelOptionsLoading}
+                    disabled={loading || frameIsDeleted}
+                    style={{ width: '100%', marginBottom: 12, textAlign: 'left' }}
+                >
+                    <Select.Option value=''>Task active model</Select.Option>
+                    {modelOptions.map((model: any): JSX.Element => (
+                        <Select.Option key={model.id} value={model.id}>
+                            {model.name || model.id}
+                        </Select.Option>
+                    ))}
+                </Select>
                 <Button
                     type='primary'
                     onClick={handleAutoAnnotate}
@@ -282,4 +363,3 @@ function AutoAnnotateControlComponent(): JSX.Element {
 }
 
 export default React.memo(AutoAnnotateControlComponent);
-

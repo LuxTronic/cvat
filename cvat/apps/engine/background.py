@@ -574,7 +574,13 @@ class TaskCreator(AbstractRequestManager):
         self.callback = create_task
         self.callback_args = (self.db_instance.pk, self.db_data)
 
-def run_yolov7_inference_frame(job_id: int, task_id: int, frame: int):
+def run_yolov7_inference_frame(
+    job_id: int,
+    task_id: int,
+    frame: int,
+    model_id: str = "",
+    model_uri: str = "",
+):
     import io
     import logging
     import requests
@@ -590,10 +596,11 @@ def run_yolov7_inference_frame(job_id: int, task_id: int, frame: int):
     log = logging.getLogger(__name__)
 
     log.info(
-        "[AUTO-ANNOTATE] Starting inference | job_id=%s task_id=%s frame=%s",
+        "[AUTO-ANNOTATE] Starting inference | job_id=%s task_id=%s frame=%s model_id=%s",
         job_id,
         task_id,
         frame,
+        model_id or "task-active",
     )
 
     # ------------------------------------------------------------------
@@ -629,14 +636,21 @@ def run_yolov7_inference_frame(job_id: int, task_id: int, frame: int):
     yolo_url = f"{settings.YOLOV7_SERVICE['URL']}/infer"
 
     log.info(
-        "[AUTO-ANNOTATE] Calling YOLO service | url=%s task_id=%s",
+        "[AUTO-ANNOTATE] Calling YOLO service | url=%s task_id=%s model_id=%s",
         yolo_url,
         task_id,
+        model_id or "task-active",
     )
+
+    params = {"task_id": task_id}
+    if model_id:
+        params["model_id"] = model_id
+    if model_uri:
+        params["model_uri"] = model_uri
 
     response = requests.post(
         yolo_url,
-        params={"task_id": task_id}, 
+        params=params,
         files={"image": ("frame.jpg", image_bytes, frame_data.mime)},
         timeout=settings.YOLOV7_SERVICE.get("TIMEOUT", 300),
     )

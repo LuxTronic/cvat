@@ -10,6 +10,15 @@ const Dotenv = require('dotenv-webpack');
 const CopyPlugin = require('copy-webpack-plugin');
 
 module.exports = (env) => {
+    const normalizeBasePath = (value) => {
+        if (!value || value === '/') {
+            return '';
+        }
+
+        const trimmed = value.replace(/^\/+|\/+$/g, '');
+        return trimmed ? `/${trimmed}` : '';
+    };
+
     const defaultAppConfig = path.join(__dirname, 'src/config.tsx');
     const defaultPlugins = ['plugins/sam'];
 
@@ -33,6 +42,7 @@ module.exports = (env) => {
     console.log('Source maps: ', sourceMapsDisabled ? 'disabled' : 'enabled');
     console.log('List of plugins: ', Object.values(transformedPlugins).map((plugin) => plugin.import));
 
+    const basePath = normalizeBasePath(process.env.CVAT_UI_BASE_PATH ?? '');
     const host = process.env.CVAT_UI_HOST ?? 'localhost';
     const port = process.env.CVAT_UI_PORT ?? 3000;
     return {
@@ -46,7 +56,7 @@ module.exports = (env) => {
         output: {
             path: path.resolve(__dirname, 'dist'),
             filename: 'assets/[name].[contenthash].min.js',
-            publicPath: '/',
+            publicPath: basePath ? `${basePath}/` : '/',
         },
         devServer: {
             host,

@@ -43,6 +43,7 @@ import { useIsMounted, usePlugins } from 'utils/hooks';
 import GlobalHotKeys, { KeyMap } from 'utils/mousetrap-react';
 import { ShortcutScope } from 'utils/enums';
 import { subKeyMap } from 'utils/component-subkeymap';
+import { withUIBasePath } from 'utils/base-path';
 import SettingsModal from './settings-modal/settings-modal';
 
 interface StateToProps {
@@ -268,10 +269,13 @@ function HeaderComponent(props: Props): JSX.Element {
         switchSettingsModalVisible(false);
     }, []);
 
+    const basePath = withUIBasePath();
+    const pathWithBase = useCallback((path: string): string => withUIBasePath(path), []);
+
     const resetOrganization = (): void => {
         localStorage.removeItem('currentOrganization');
         if (/(webhooks)|(\d+)/.test(window.location.pathname)) {
-            window.location.pathname = '/';
+            window.location.pathname = basePath;
         } else {
             window.location.reload();
         }
@@ -284,7 +288,7 @@ function HeaderComponent(props: Props): JSX.Element {
             localStorage.setItem('currentOrganization', organization.slug);
             if (/\d+/.test(window.location.pathname)) {
                 // a resource is opened (task/job/etc.)
-                window.location.pathname = '/';
+                window.location.pathname = basePath;
             } else {
                 window.location.reload();
             }
@@ -299,7 +303,7 @@ function HeaderComponent(props: Props): JSX.Element {
             key: 'admin_page',
             icon: <ControlOutlined />,
             onClick: (): void => {
-                window.open('/admin', '_blank');
+                window.open(pathWithBase('/admin'), '_blank');
             },
             label: 'Admin page',
         }, 0]);
@@ -408,7 +412,7 @@ function HeaderComponent(props: Props): JSX.Element {
                     className={getButtonClassName('projects')}
                     type='link'
                     value='projects'
-                    href='/projects?page=1'
+                    href={pathWithBase('/projects?page=1')}
                     onClick={(event: React.MouseEvent): void => {
                         event.preventDefault();
                         history.push('/projects');
@@ -420,7 +424,7 @@ function HeaderComponent(props: Props): JSX.Element {
                     className={getButtonClassName('tasks')}
                     type='link'
                     value='tasks'
-                    href='/tasks?page=1'
+                    href={pathWithBase('/tasks?page=1')}
                     onClick={(event: React.MouseEvent): void => {
                         event.preventDefault();
                         history.push('/tasks');
@@ -432,7 +436,7 @@ function HeaderComponent(props: Props): JSX.Element {
                     className={getButtonClassName('jobs')}
                     type='link'
                     value='jobs'
-                    href='/jobs?page=1'
+                    href={pathWithBase('/jobs?page=1')}
                     onClick={(event: React.MouseEvent): void => {
                         event.preventDefault();
                         history.push('/jobs');
@@ -444,7 +448,7 @@ function HeaderComponent(props: Props): JSX.Element {
                     className={getButtonClassName('cloudstorages')}
                     type='link'
                     value='cloudstorages'
-                    href='/cloudstorages?page=1'
+                    href={pathWithBase('/cloudstorages?page=1')}
                     onClick={(event: React.MouseEvent): void => {
                         event.preventDefault();
                         history.push('/cloudstorages');
@@ -456,7 +460,7 @@ function HeaderComponent(props: Props): JSX.Element {
                     className={getButtonClassName('requests')}
                     type='link'
                     value='requests'
-                    href='/requests?page=1'
+                    href={pathWithBase('/requests?page=1')}
                     onClick={(event: React.MouseEvent): void => {
                         event.preventDefault();
                         history.push('/requests');
@@ -469,7 +473,7 @@ function HeaderComponent(props: Props): JSX.Element {
                         className={getButtonClassName('models')}
                         type='link'
                         value='models'
-                        href='/models'
+                        href={pathWithBase('/models')}
                         onClick={(event: React.MouseEvent): void => {
                             event.preventDefault();
                             history.push('/models');
@@ -482,10 +486,10 @@ function HeaderComponent(props: Props): JSX.Element {
                     <Button
                         className={getButtonClassName('analytics', false)}
                         type='link'
-                        href='/analytics'
+                        href={pathWithBase('/analytics')}
                         onClick={(event: React.MouseEvent): void => {
                             event.preventDefault();
-                            window.open('/analytics', '_blank');
+                            window.open(pathWithBase('/analytics'), '_blank');
                         }}
                     >
                         Analytics

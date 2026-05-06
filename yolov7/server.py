@@ -1,10 +1,13 @@
 import os
+import re
 import threading
 import subprocess
 import logging
 from pathlib import Path
 from typing import Dict
+from urllib.parse import urlparse
 
+import boto3
 import redis
 import torch
 import numpy as np
@@ -43,37 +46,62 @@ DEVICE = select_device("0" if torch.cuda.is_available() else "cpu")
 USE_HALF = (DEVICE.type != "cpu")
 
 # ----------------------------
-# Model cache (task_id -> model)
+# Model cache (task-local active model or selected legacy model -> model)
 # ----------------------------
-MODEL_CACHE: Dict[int, torch.nn.Module] = {}
+MODEL_CACHE: Dict[str, torch.nn.Module] = {}
 MODEL_CACHE_LOCK = threading.Lock()
 
 # Optional: prevent two threads running inference simultaneously on same task model
-MODEL_INFER_LOCKS: Dict[int, threading.Lock] = {}
+MODEL_INFER_LOCKS: Dict[str, threading.Lock] = {}
 MODEL_INFER_LOCKS_LOCK = threading.Lock()
 
 
-def _get_infer_lock(task_id: int) -> threading.Lock:
+def _get_infer_lock(cache_key: str) -> threading.Lock:
     with MODEL_INFER_LOCKS_LOCK:
-        if task_id not in MODEL_INFER_LOCKS:
-            MODEL_INFER_LOCKS[task_id] = threading.Lock()
-        return MODEL_INFER_LOCKS[task_id]
+        if cache_key not in MODEL_INFER_LOCKS:
+            MODEL_INFER_LOCKS[cache_key] = threading.Lock()
+        return MODEL_INFER_LOCKS[cache_key]
 
 
-def get_model_for_task(task_id: int) -> torch.nn.Module:
-    # Load once per task_id, keep in memory
+def _safe_model_id(value: str) -> str:
+    return re.sub(r"[^A-Za-z0-9_.-]+", "_", value or "selected_model").strip("_") or "selected_model"
+
+
+def _parse_s3_uri(model_uri: str):
+    parsed = urlparse(model_uri)
+    if parsed.scheme != "s3" or not parsed.netloc or not parsed.path.strip("/"):
+        raise RuntimeError(f"Unsupported model URI: {model_uri}")
+    return parsed.netloc, parsed.path.lstrip("/")
+
+
+def _download_s3_model(model_uri: str, weights_path: Path) -> None:
+    bucket, key = _parse_s3_uri(model_uri)
+    weights_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = weights_path.with_suffix(weights_path.suffix + ".tmp")
+
+    log.info("[YOLO] Downloading selected model | s3=%s | target=%s", model_uri, weights_path)
+    boto3.client("s3").download_file(bucket, key, str(tmp_path))
+    tmp_path.replace(weights_path)
+
+
+def selected_model_weights_path(model_id: str, model_uri: str) -> Path:
+    safe_id = _safe_model_id(model_id or model_uri)
+    return YOLO_MODELS_ROOT / "selected" / safe_id / "weights" / "best.pt"
+
+
+def get_model_from_weights(cache_key: str, weights_path: Path) -> torch.nn.Module:
+    # Load once per selected key, keep in memory
     with MODEL_CACHE_LOCK:
-        if task_id in MODEL_CACHE:
-            return MODEL_CACHE[task_id]
+        if cache_key in MODEL_CACHE:
+            return MODEL_CACHE[cache_key]
 
-        weights_path = YOLO_MODELS_ROOT / f"task_{task_id}" / "active" / "weights" / "best.pt"
         if not weights_path.exists():
-            raise RuntimeError(f"No active model for task {task_id}: {weights_path} does not exist")
+            raise RuntimeError(f"No YOLOv7 model weights found for {cache_key}: {weights_path} does not exist")
 
-        version_dir = weights_path.parents[2].name  # e.g. v3
+        version_dir = weights_path.parents[2].name
         log.info(
-            "[YOLO] Loading model | task=%s | version=%s | weights=%s | device=%s | half=%s",
-            task_id,
+            "[YOLO] Loading model | key=%s | version=%s | weights=%s | device=%s | half=%s",
+            cache_key,
             version_dir,
             weights_path,
             DEVICE,
@@ -85,16 +113,35 @@ def get_model_for_task(task_id: int) -> torch.nn.Module:
         if USE_HALF:
             model.half()
 
-        MODEL_CACHE[task_id] = model
+        MODEL_CACHE[cache_key] = model
         return model
+
+
+def get_model_for_task(task_id: int) -> torch.nn.Module:
+    weights_path = YOLO_MODELS_ROOT / f"task_{task_id}" / "active" / "weights" / "best.pt"
+    return get_model_from_weights(f"task:{task_id}", weights_path)
+
+
+def get_selected_model(task_id: int, model_id: str, model_uri: str):
+    if not model_uri:
+        cache_key = f"task:{task_id}"
+        weights_path = YOLO_MODELS_ROOT / f"task_{task_id}" / "active" / "weights" / "best.pt"
+        return cache_key, weights_path, get_model_from_weights(cache_key, weights_path)
+
+    cache_key = f"selected:{_safe_model_id(model_id or model_uri)}"
+    weights_path = selected_model_weights_path(model_id, model_uri)
+    if not weights_path.exists():
+        _download_s3_model(model_uri, weights_path)
+    return cache_key, weights_path, get_model_from_weights(cache_key, weights_path)
 
 
 def invalidate_task_model(task_id: int) -> None:
     # Called after training switches "active" symlink
     with MODEL_CACHE_LOCK:
-        if task_id in MODEL_CACHE:
+        cache_key = f"task:{task_id}"
+        if cache_key in MODEL_CACHE:
             log.info("[YOLO] Invalidating cached model for task %s", task_id)
-            MODEL_CACHE.pop(task_id, None)
+            MODEL_CACHE.pop(cache_key, None)
 
 
 def _run_training(cmd, task_id: int):
@@ -146,24 +193,29 @@ def health():
 
 
 @app.post("/infer")
-async def infer(image: UploadFile = File(...), task_id: int = 0):
+async def infer(
+    image: UploadFile = File(...),
+    task_id: int = 0,
+    model_id: str = "",
+    model_uri: str = "",
+):
     try:
         # ----------------------------
         # Load model (cached per task)
         # ----------------------------
-        model = get_model_for_task(task_id)
-        infer_lock = _get_infer_lock(task_id)
+        cache_key, weights_path, model = get_selected_model(task_id, model_id, model_uri)
+        infer_lock = _get_infer_lock(cache_key)
 
-        weights_path = YOLO_MODELS_ROOT / f"task_{task_id}" / "active" / "weights" / "best.pt"
-        version = weights_path.parents[2].name  # e.g. v3
+        version = weights_path.parents[2].name
         stride = int(model.stride.max())
 
         # ----------------------------
         # Logging: model + request
         # ----------------------------
         log.info(
-            "[YOLO-INFER] task=%s | version=%s | weights=%s | stride=%d | half=%s",
+            "[YOLO-INFER] task=%s | model=%s | version=%s | weights=%s | stride=%d | half=%s",
             task_id,
+            model_id or "task-active",
             version,
             weights_path,
             stride,

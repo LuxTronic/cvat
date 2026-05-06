@@ -50,10 +50,11 @@ import { ActionParameterType, BaseAction } from 'cvat-core/src/annotations-actio
 import { Request, RequestOperation } from 'cvat-core/src/request';
 import AboutData from 'cvat-core/src/about';
 import { MinimalShape, TrackerResults, InteractorResults } from 'cvat-core/src/lambda-manager';
+import { withUIBasePath } from './utils/base-path';
 
 const cvat: CVATCore = _cvat;
 
-cvat.config.backendAPI = '/api';
+cvat.config.backendAPI = withUIBasePath('/api');
 cvat.config.origin = window.location.origin;
 // Set the TUS chunk size to 2 MB. A small value works better in case of a slow internet connection.
 // A larger value may cause a server-side timeout errors in the current implementation.

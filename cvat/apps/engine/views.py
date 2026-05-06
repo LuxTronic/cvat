@@ -1913,15 +1913,75 @@ class JobViewSet(viewsets.GenericViewSet, mixins.ListModelMixin, mixins.CreateMo
         frame = int(frame)
 
         task_id = db_job.segment.task.data.id
+        model_id = request.query_params.get("model_id", "")
+        if not model_id and isinstance(request.data, dict):
+            model_id = request.data.get("model_id", "")
+        model_uri = ""
+        selected_model = None
+        if model_id:
+            for candidate in settings.LUX_YOLOV7_MODELS:
+                if str(candidate.get("id", "")) == str(model_id):
+                    selected_model = candidate
+                    model_uri = str(candidate.get("model_uri", ""))
+                    break
+
+            if selected_model is None:
+                raise ValidationError(f"Unknown YOLOv7 auto-annotation model: {model_id}")
         
         # Run inference synchronously
         run_yolov7_inference_frame(
             job_id=db_job.id,
             task_id=task_id,
             frame=frame,
+            model_id=model_id or "",
+            model_uri=model_uri,
         )
 
         return Response(status=200)
+
+    @extend_schema(
+        methods=["GET"],
+        summary="List YOLOv7 auto-annotation models available for this job",
+        responses={"200": OpenApiResponse(description="Available YOLOv7 models")},
+    )
+    @action(detail=True, methods=["GET"], url_path="auto-annotate-models")
+    def auto_annotate_models(self, request: ExtendedRequest, pk: int):
+        db_job = self.get_object()
+        task_label_names = {
+            str(label.name or "").strip()
+            for label in db_job.get_labels()
+            if str(label.name or "").strip()
+        }
+        models = []
+
+        for model in settings.LUX_YOLOV7_MODELS:
+            labels = [
+                str(label).strip()
+                for label in model.get("labels", [])
+                if str(label).strip()
+            ]
+            if labels and not set(labels).issubset(task_label_names):
+                continue
+
+            models.append(
+                {
+                    "id": model.get("id", ""),
+                    "name": model.get("name", model.get("id", "")),
+                    "model_slot": model.get("model_slot", ""),
+                    "legacy_project_key": model.get("legacy_project_key", ""),
+                    "dataset_family_id": model.get("dataset_family_id", ""),
+                    "family_key": model.get("family_key", ""),
+                    "model_uri": model.get("model_uri", ""),
+                    "labels": labels,
+                }
+            )
+
+        return Response(
+            {
+                "models": models,
+                "task_labels": sorted(task_label_names),
+            }
+        )
 
     @extend_schema(
         methods=["POST"],

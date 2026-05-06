@@ -35,6 +35,7 @@ import GlobalHotKeys, { KeyMap } from 'utils/mousetrap-react';
 import { ShortcutScope } from 'utils/enums';
 import { registerComponentShortcuts } from 'actions/shortcuts-actions';
 import { subKeyMap } from 'utils/component-subkeymap';
+import { withUIBasePath } from 'utils/base-path';
 import ShortcutsSelect from './shortcuts-select';
 
 const cvat = getCore();
@@ -261,7 +262,7 @@ function TagAnnotationSidebar(props: StateToProps & DispatchToProps): JSX.Elemen
             }
 
             await cvat.server.request(
-                `/api/jobs/${jobInstance.id}/auto-classify`,
+                withUIBasePath(`/api/jobs/${jobInstance.id}/auto-classify`),
                 {
                     method: 'POST',
                     params: { frame: frameNumber },

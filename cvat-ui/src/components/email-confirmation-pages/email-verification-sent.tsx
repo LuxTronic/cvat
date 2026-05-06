@@ -6,6 +6,7 @@ import React from 'react';
 import { Col, Row } from 'antd/lib/grid';
 import Layout from 'antd/lib/layout';
 import Button from 'antd/lib/button';
+import { withUIBasePath } from 'utils/base-path';
 import './styles.scss';
 
 const { Content } = Layout;
@@ -21,7 +22,7 @@ export default function EmailVerificationSentPage(): JSX.Element {
                 <Row justify='center' align='middle' id='email-verification-sent-page-container'>
                     <Col>
                         <h1>Please, confirm your email</h1>
-                        <Button className='cvat-go-to-login-button' type='link' href='/auth/login'>
+                        <Button className='cvat-go-to-login-button' type='link' href={withUIBasePath('/auth/login')}>
                             Go to login page
                         </Button>
                     </Col>

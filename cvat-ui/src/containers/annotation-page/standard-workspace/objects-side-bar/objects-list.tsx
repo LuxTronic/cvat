@@ -123,7 +123,8 @@ const componentShortcuts = {
     DELETE_OBJECT_STANDARD_WORKSPACE: {
         name: 'Delete object',
         description: 'Delete an active object. Use shift to force delete of locked objects',
-        sequences: ['del', 'shift+del'],
+        sequences: ['del', 'shift+del', 'backspace', 'shift+backspace'],
+        displayedSequences: ['del', 'shift+del'],
         scope: ShortcutScope.OBJECTS_SIDEBAR,
     },
     TO_BACKGROUND: {
