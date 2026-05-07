@@ -9,19 +9,17 @@ import numpy as np
 
 
 IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".bmp", ".webp")
-SCRIPT_DIR = Path(__file__).resolve().parent
-HASTY_ROOT = SCRIPT_DIR / "hasty_exports"
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Draw YOLO segmentation annotations on original images."
     )
-    parser.add_argument("--images-dir", type=Path, default=HASTY_ROOT / "imgs")
-    parser.add_argument("--labels-dir", type=Path, default=HASTY_ROOT / "seg_annotations")
-    parser.add_argument("--json-path", type=Path, default=HASTY_ROOT / "annotations.json")
-    parser.add_argument("--classes-file", type=Path, default=HASTY_ROOT / "classes.txt")
-    parser.add_argument("--output-dir", type=Path, default=HASTY_ROOT / "vis_outputs")
+    parser.add_argument("--images-dir", type=Path, default=Path("hasty_exports/imgs"))
+    parser.add_argument("--labels-dir", type=Path, default=Path("hasty_exports/seg_annotations"))
+    parser.add_argument("--json-path", type=Path, default=Path("hasty_exports/annotations.json"))
+    parser.add_argument("--classes-file", type=Path, default=Path("hasty_exports/classes.txt"))
+    parser.add_argument("--output-dir", type=Path, default=Path("hasty_exports/vis_outputs"))
     parser.add_argument(
         "--line-thickness",
         type=int,
@@ -33,6 +31,17 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=0.35,
         help="Fill alpha for polygon overlays in [0,1].",
+    )
+    parser.add_argument(
+        "--show-vertices",
+        action="store_true",
+        help="Draw a dot at each polygon vertex.",
+    )
+    parser.add_argument(
+        "--vertex-radius",
+        type=int,
+        default=3,
+        help="Vertex dot radius in pixels when --show-vertices is enabled.",
     )
     return parser.parse_args()
 
@@ -67,6 +76,32 @@ def find_image_for_stem(images_dir: Path, stem: str) -> Path | None:
     return None
 
 
+def build_image_lookup(images_dir: Path) -> dict[str, list[Path]]:
+    lookup: dict[str, list[Path]] = {}
+    valid_exts = {ext.lower() for ext in IMAGE_EXTENSIONS}
+    for p in images_dir.rglob("*"):
+        if not p.is_file():
+            continue
+        if p.suffix.lower() not in valid_exts:
+            continue
+        lookup.setdefault(p.stem, []).append(p)
+
+    for stem in lookup:
+        lookup[stem].sort(key=lambda x: x.as_posix())
+    return lookup
+
+
+def resolve_image_for_stem(images_dir: Path, stem: str, image_lookup: dict[str, list[Path]]) -> Path | None:
+    direct = find_image_for_stem(images_dir, stem)
+    if direct is not None:
+        return direct
+
+    candidates = image_lookup.get(stem, [])
+    if not candidates:
+        return None
+    return candidates[0]
+
+
 def parse_label_line(line: str) -> tuple[int, np.ndarray] | None:
     parts = line.strip().split()
     if len(parts) < 7 or len(parts) % 2 == 0:
@@ -96,6 +131,8 @@ def draw_polygon_with_label(
     class_name: str,
     alpha: float,
     line_thickness: int,
+    show_vertices: bool,
+    vertex_radius: int,
 ) -> None:
     color = color_for_class(class_id)
     overlay = image.copy()
@@ -103,6 +140,10 @@ def draw_polygon_with_label(
     cv2.fillPoly(overlay, [poly_px], color)
     cv2.addWeighted(overlay, alpha, image, 1.0 - alpha, 0, image)
     cv2.polylines(image, [poly_px], isClosed=True, color=color, thickness=line_thickness)
+    if show_vertices:
+        for x, y in poly_px:
+            cv2.circle(image, (int(x), int(y)), max(1, vertex_radius), (255, 255, 255), -1)
+            cv2.circle(image, (int(x), int(y)), max(1, vertex_radius), color, 1)
 
     x, y = poly_px[np.argmin(poly_px[:, 1])]
     label = f"{class_id}:{class_name}" if class_name else str(class_id)
@@ -123,6 +164,8 @@ def process_one(
     class_names: list[str],
     alpha: float,
     line_thickness: int,
+    show_vertices: bool,
+    vertex_radius: int,
 ) -> tuple[int, int]:
     image = cv2.imread(str(image_path))
     if image is None:
@@ -149,6 +192,8 @@ def process_one(
             class_name=class_name,
             alpha=alpha,
             line_thickness=line_thickness,
+            show_vertices=show_vertices,
+            vertex_radius=vertex_radius,
         )
         drawn += 1
 
@@ -161,6 +206,7 @@ def main() -> None:
     args = parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=True)
     class_names = load_class_names(args.json_path, args.classes_file)
+    image_lookup = build_image_lookup(args.images_dir)
 
     total_images = 0
     missing_images = 0
@@ -169,7 +215,7 @@ def main() -> None:
 
     for label_path in sorted(args.labels_dir.glob("*.txt")):
         stem = label_path.stem
-        image_path = find_image_for_stem(args.images_dir, stem)
+        image_path = resolve_image_for_stem(args.images_dir, stem, image_lookup)
         if image_path is None:
             missing_images += 1
             continue
@@ -182,6 +228,8 @@ def main() -> None:
             class_names=class_names,
             alpha=float(np.clip(args.alpha, 0.0, 1.0)),
             line_thickness=max(1, args.line_thickness),
+            show_vertices=args.show_vertices,
+            vertex_radius=max(1, args.vertex_radius),
         )
         total_images += 1
         total_drawn += drawn

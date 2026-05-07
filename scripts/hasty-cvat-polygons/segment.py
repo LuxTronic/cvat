@@ -1,14 +1,18 @@
 from __future__ import annotations
+
 import argparse
 import json
 from dataclasses import dataclass
 from pathlib import Path
+
 import cv2
 import numpy as np
 from ultralytics import SAM
 
+
 SCRIPT_DIR = Path(__file__).resolve().parent
 HASTY_ROOT = SCRIPT_DIR / "hasty_exports"
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff"}
 
 
 @dataclass
@@ -27,6 +31,31 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-dir", type=Path, default=HASTY_ROOT / "seg_annotations")
     parser.add_argument("--sam-model", type=str, default="sam2_b.pt")
     parser.add_argument("--device", type=str, default="")
+    parser.add_argument(
+        "--epsilon-ratio",
+        type=float,
+        default=0.01,
+        help="Contour simplification ratio: epsilon = epsilon_ratio * arcLength.",
+    )
+    parser.add_argument(
+        "--contour-mode",
+        type=str,
+        choices=("external", "tree"),
+        default="external",
+        help="Contour extraction mode for mask->polygon conversion.",
+    )
+    parser.add_argument(
+        "--min-contour-area",
+        type=float,
+        default=100.0,
+        help="Skip contours with area below this threshold in pixels.",
+    )
+    parser.add_argument(
+        "--max-polygons-per-object",
+        type=int,
+        default=1,
+        help="Keep up to N largest polygons per object after filtering.",
+    )
     parser.add_argument(
         "--fallback-to-box",
         action="store_true",
@@ -85,13 +114,70 @@ def polygon_area(poly: np.ndarray) -> float:
     return 0.5 * float(abs(np.dot(x, np.roll(y, -1)) - np.dot(y, np.roll(x, -1))))
 
 
-def extract_best_polygon(result) -> np.ndarray | None:
-    if result.masks is None or not hasattr(result.masks, "xy") or not result.masks.xy:
+def extract_first_mask(result) -> np.ndarray | None:
+    if result.masks is None or not hasattr(result.masks, "data"):
         return None
-    polys = [np.asarray(p, dtype=np.float32) for p in result.masks.xy if len(p) >= 3]
-    if not polys:
+    data = result.masks.data
+    if data is None or len(data) == 0:
         return None
-    return max(polys, key=polygon_area)
+    mask = data[0].cpu().numpy()
+    mask_u8 = (mask > 0).astype(np.uint8) * 255
+    return mask_u8
+
+
+def extract_masks_batch(result, expected_count: int) -> list[np.ndarray | None]:
+    if result.masks is None or not hasattr(result.masks, "data"):
+        return [None] * expected_count
+    data = result.masks.data
+    if data is None:
+        return [None] * expected_count
+
+    masks: list[np.ndarray | None] = []
+    count = min(len(data), expected_count)
+    for idx in range(count):
+        mask = data[idx].cpu().numpy()
+        mask_u8 = (mask > 0).astype(np.uint8) * 255
+        masks.append(mask_u8)
+
+    if len(masks) < expected_count:
+        masks.extend([None] * (expected_count - len(masks)))
+    return masks[:expected_count]
+
+
+def contour_mode_from_name(name: str) -> int:
+    if name == "tree":
+        return cv2.RETR_TREE
+    return cv2.RETR_EXTERNAL
+
+
+def mask_to_polygons(
+    mask_u8: np.ndarray,
+    epsilon_ratio: float,
+    contour_mode: int,
+    min_contour_area: float,
+    max_polygons_per_object: int,
+) -> list[np.ndarray]:
+    contours, _ = cv2.findContours(mask_u8, contour_mode, cv2.CHAIN_APPROX_NONE)
+    polys: list[np.ndarray] = []
+    for cnt in contours:
+        area = cv2.contourArea(cnt)
+        if area < min_contour_area:
+            continue
+        perimeter = cv2.arcLength(cnt, True)
+        if perimeter <= 0:
+            continue
+        epsilon = max(0.0, epsilon_ratio) * perimeter
+        approx = cv2.approxPolyDP(cnt, epsilon, True)
+        approx_xy = approx.reshape(-1, 2).astype(np.float32)
+        if approx_xy.shape[0] < 3:
+            continue
+        polys.append(approx_xy)
+
+    polys.sort(key=polygon_area, reverse=True)
+    max_keep = max(0, int(max_polygons_per_object))
+    if max_keep == 0:
+        return []
+    return polys[:max_keep]
 
 
 def box_to_polygon(x1: int, y1: int, x2: int, y2: int) -> np.ndarray:
@@ -115,6 +201,47 @@ def write_ultralytics_seg_file(output_path: Path, rows: list[str]) -> None:
     output_path.write_text("\n".join(rows), encoding="utf-8")
 
 
+def build_image_lookup(images_dir: Path) -> dict[str, list[Path]]:
+    lookup: dict[str, list[Path]] = {}
+    for p in images_dir.rglob("*"):
+        if not p.is_file():
+            continue
+        if p.suffix.lower() not in IMAGE_EXTENSIONS:
+            continue
+        lookup.setdefault(p.name, []).append(p)
+
+    for key in lookup:
+        lookup[key].sort(key=lambda x: x.as_posix())
+    return lookup
+
+
+def resolve_image_path(images_dir: Path, image_entry: dict, image_lookup: dict[str, list[Path]]) -> Path | None:
+    image_name = image_entry.get("image_name")
+    if not image_name:
+        return None
+
+    direct = images_dir / image_name
+    if direct.exists():
+        return direct
+
+    basename = Path(str(image_name)).name
+    direct_basename = images_dir / basename
+    if direct_basename.exists():
+        return direct_basename
+
+    candidates = image_lookup.get(basename, [])
+    if not candidates:
+        return None
+
+    dataset_name = str(image_entry.get("dataset_name", "")).strip().lower()
+    if dataset_name:
+        dataset_matched = [p for p in candidates if dataset_name in p.as_posix().lower()]
+        if dataset_matched:
+            return dataset_matched[0]
+
+    return candidates[0]
+
+
 def process_image(
     sam_model: SAM,
     image_path: Path,
@@ -124,6 +251,10 @@ def process_image(
     fallback_to_box: bool,
     device: str,
     debug: bool,
+    epsilon_ratio: float,
+    contour_mode: int,
+    min_contour_area: float,
+    max_polygons_per_object: int,
 ) -> tuple[int, int, int]:
     image_bgr = cv2.imread(str(image_path))
     if image_bgr is None:
@@ -137,6 +268,7 @@ def process_image(
     skipped_unknown_class = 0
     debug_errors_shown = 0
 
+    valid_items: list[tuple[int, tuple[int, int, int, int], str]] = []
     for lab in labels:
         class_id = class_to_index.get(lab.class_name)
         if class_id is None:
@@ -147,39 +279,63 @@ def process_image(
         if bbox is None:
             failed += 1
             continue
-        x1, y1, x2, y2 = bbox
-        poly_global: np.ndarray | None = None
+        valid_items.append((class_id, bbox, lab.class_name))
 
+    masks_by_item: list[np.ndarray | None] = [None] * len(valid_items)
+    if valid_items:
         try:
-            kwargs = {"bboxes": [[x1, y1, x2, y2]], "verbose": False}
+            kwargs = {"bboxes": [list(item[1]) for item in valid_items], "verbose": False}
             if device:
                 kwargs["device"] = device
             result_list = sam_model(image_rgb, **kwargs)
             if result_list:
-                best = extract_best_polygon(result_list[0])
-                if best is not None:
-                    poly_global = best
+                masks_by_item = extract_masks_batch(result_list[0], len(valid_items))
+        except Exception as exc:
+            if debug and debug_errors_shown < 10:
+                print(f"[DEBUG] Batch SAM failed image={image_path.name} err={exc}")
+                debug_errors_shown += 1
+            masks_by_item = [None] * len(valid_items)
+
+    for idx, (class_id, bbox, class_name) in enumerate(valid_items):
+        x1, y1, x2, y2 = bbox
+        poly_globals: list[np.ndarray] = []
+
+        try:
+            mask_u8 = masks_by_item[idx]
+            if mask_u8 is not None:
+                poly_globals = mask_to_polygons(
+                    mask_u8=mask_u8,
+                    epsilon_ratio=epsilon_ratio,
+                    contour_mode=contour_mode,
+                    min_contour_area=min_contour_area,
+                    max_polygons_per_object=max_polygons_per_object,
+                )
         except Exception as exc:
             if debug and debug_errors_shown < 10:
                 print(
-                    f"[DEBUG] SAM failed image={image_path.name} class={lab.class_name} "
+                    f"[DEBUG] SAM failed image={image_path.name} class={class_name} "
                     f"bbox={[x1, y1, x2, y2]} err={exc}"
                 )
                 debug_errors_shown += 1
-            poly_global = None
+            poly_globals = []
 
-        if poly_global is None and fallback_to_box:
-            poly_global = box_to_polygon(x1, y1, x2, y2)
-        if poly_global is None:
+        if not poly_globals and fallback_to_box:
+            poly_globals = [box_to_polygon(x1, y1, x2, y2)]
+        if not poly_globals:
             failed += 1
             continue
 
-        row = generate_ultralytics_seg_row(class_id, poly_global, img_w, img_h)
-        if row is None:
+        wrote_any = False
+        for poly_global in poly_globals:
+            row = generate_ultralytics_seg_row(class_id, poly_global, img_w, img_h)
+            if row is None:
+                continue
+            lines_out.append(row)
+            wrote_any = True
+        if wrote_any:
+            ok += 1
+        else:
             failed += 1
-            continue
-        lines_out.append(row)
-        ok += 1
 
     write_ultralytics_seg_file(output_path, lines_out)
     return ok, failed, skipped_unknown_class
@@ -203,6 +359,7 @@ def main() -> None:
     export_data = load_json_export(args.json_path)
     class_to_index = load_class_to_index(args.classes_file, export_data)
     sam_model = SAM(args.sam_model)
+    image_lookup = build_image_lookup(args.images_dir)
 
     total_images = 0
     total_objects = 0
@@ -216,8 +373,8 @@ def main() -> None:
         image_name = image_entry.get("image_name")
         if not image_name:
             continue
-        image_path = args.images_dir / image_name
-        if not image_path.exists():
+        image_path = resolve_image_path(args.images_dir, image_entry, image_lookup)
+        if image_path is None or not image_path.exists():
             missing_images += 1
             continue
 
@@ -242,6 +399,10 @@ def main() -> None:
             fallback_to_box=args.fallback_to_box,
             device=args.device,
             debug=args.debug,
+            epsilon_ratio=float(args.epsilon_ratio),
+            contour_mode=contour_mode_from_name(args.contour_mode),
+            min_contour_area=float(args.min_contour_area),
+            max_polygons_per_object=int(args.max_polygons_per_object),
         )
         total_ok += ok
         total_failed += failed

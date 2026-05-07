@@ -49,8 +49,8 @@ def should_retrain(task_id: int, mode: str = "detection") -> bool:
 
 
 def reset(task_id: int, mode: str = "detection"):
-    r.delete(_frames_key(task_id, mode))
-    logger.info("[COUNTER] Task %s mode=%s counter reset", task_id, mode)
+    r.delete(_frames_key(task_id, mode), _lock_key(task_id, mode))
+    logger.info("[COUNTER] Task %s mode=%s counter and training lock reset", task_id, mode)
 
 
 def training_lock(task_id: int, mode: str = "detection"):
