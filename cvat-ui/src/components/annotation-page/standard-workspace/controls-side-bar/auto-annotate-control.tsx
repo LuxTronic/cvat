@@ -287,12 +287,24 @@ function AutoAnnotateControlComponent(): JSX.Element {
                     onChange={(value: string): void => setSelectedModelID(value)}
                     loading={modelOptionsLoading}
                     disabled={loading || frameIsDeleted}
+                    optionLabelProp='label'
                     style={{ width: '100%', marginBottom: 12, textAlign: 'left' }}
                 >
-                    <Select.Option value=''>Task active model</Select.Option>
+                    <Select.Option value='' label='Task active model'>Task active model</Select.Option>
                     {modelOptions.map((model: any): JSX.Element => (
-                        <Select.Option key={model.id} value={model.id}>
-                            {model.name || model.id}
+                        <Select.Option key={model.id} value={model.id} label={model.name || model.id}>
+                            <div style={{ display: 'grid', gap: 2 }}>
+                                <span>{model.name || model.id}</span>
+                                <span style={{ fontSize: 11, color: '#8c8c8c' }}>
+                                    {[
+                                        model.slot_display_name || model.model_slot || '',
+                                        model.source_kind === 'registry_active_slot' ? 'active slot' : (
+                                            model.source_kind === 'registry_candidate' ? 'registry candidate' : 'legacy'
+                                        ),
+                                        model.registry_status || '',
+                                    ].filter(Boolean).join(' · ')}
+                                </span>
+                            </div>
                         </Select.Option>
                     ))}
                 </Select>

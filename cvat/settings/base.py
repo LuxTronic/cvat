@@ -433,6 +433,10 @@ def _load_lux_yolov7_models():
 
 
 LUX_YOLOV7_MODELS = _load_lux_yolov7_models()
+LUX_MODEL_CATALOG = {
+    "URL": os.getenv("CVAT_LUX_MODEL_CATALOG_URL", "").strip(),
+    "TIMEOUT": int(os.getenv("CVAT_LUX_MODEL_CATALOG_TIMEOUT", 8)),
+}
 
 YOLOV8CLS_SERVICE = {
     "URL": os.getenv("CVAT_YOLOV8CLS_SERVICE_URL", "http://host.docker.internal:8001"),

@@ -7,6 +7,7 @@ import itertools
 import os
 from rq.job import JobStatus
 import os.path as osp
+import requests
 import shutil
 import textwrap
 import traceback
@@ -1883,6 +1884,80 @@ class JobViewSet(viewsets.GenericViewSet, mixins.ListModelMixin, mixins.CreateMo
                 except (AttributeError, IntegrityError) as e:
                     return Response(data=str(e), status=status.HTTP_400_BAD_REQUEST)
                 return Response(data)
+
+    def _remote_lux_yolov7_models(self, db_job: Job) -> list[dict[str, Any]]:
+        url = str(settings.LUX_MODEL_CATALOG.get("URL") or "").strip()
+        if not url:
+            return []
+
+        task_label_names = [
+            str(label.name or "").strip()
+            for label in db_job.get_labels()
+            if str(label.name or "").strip()
+        ]
+        params: list[tuple[str, str | int]] = [
+            ("solution_id", "final-pallet-inspection"),
+            ("task_type", "object_detection"),
+            ("task_id", db_job.segment.task_id),
+            ("job_id", db_job.id),
+        ]
+        task_name = str(db_job.segment.task.name or "").strip()
+        if task_name:
+            params.append(("task_name", task_name))
+        for label in task_label_names:
+            params.append(("labels", label))
+
+        timeout = int(settings.LUX_MODEL_CATALOG.get("TIMEOUT") or 8)
+        try:
+            response = requests.get(url, params=params, timeout=timeout)
+            response.raise_for_status()
+            payload = response.json()
+        except Exception:
+            return []
+
+        models = payload.get("models", []) if isinstance(payload, dict) else []
+        return [model for model in models if isinstance(model, dict)]
+
+    def _available_lux_yolov7_models(self, db_job: Job) -> list[dict[str, Any]]:
+        task_label_names = {
+            str(label.name or "").strip()
+            for label in db_job.get_labels()
+            if str(label.name or "").strip()
+        }
+        merged: list[dict[str, Any]] = []
+        seen_ids: set[str] = set()
+        for model in [*self._remote_lux_yolov7_models(db_job), *settings.LUX_YOLOV7_MODELS]:
+            model_id = str(model.get("id", "")).strip()
+            if not model_id or model_id in seen_ids:
+                continue
+            labels = [
+                str(label).strip()
+                for label in model.get("labels", [])
+                if str(label).strip()
+            ]
+            if labels and not set(labels).issubset(task_label_names):
+                continue
+            seen_ids.add(model_id)
+            merged.append(
+                {
+                    "id": model_id,
+                    "name": model.get("name", model_id),
+                    "model_slot": model.get("model_slot", ""),
+                    "legacy_project_key": model.get("legacy_project_key", ""),
+                    "dataset_family_id": model.get("dataset_family_id", ""),
+                    "family_key": model.get("family_key", ""),
+                    "model_uri": model.get("model_uri", ""),
+                    "labels": labels,
+                    "source_kind": model.get("source_kind", "legacy"),
+                    "registry_status": model.get("registry_status", ""),
+                    "slot_status": model.get("slot_status", ""),
+                    "slot_display_name": model.get("slot_display_name", ""),
+                    "model_version_id": model.get("model_version_id", ""),
+                    "architecture": model.get("architecture", ""),
+                }
+            )
+        return merged
+
     @extend_schema(
         methods=["POST"],
         summary="Generate inference using YOLOv7 service",
@@ -1919,7 +1994,7 @@ class JobViewSet(viewsets.GenericViewSet, mixins.ListModelMixin, mixins.CreateMo
         model_uri = ""
         selected_model = None
         if model_id:
-            for candidate in settings.LUX_YOLOV7_MODELS:
+            for candidate in self._available_lux_yolov7_models(db_job):
                 if str(candidate.get("id", "")) == str(model_id):
                     selected_model = candidate
                     model_uri = str(candidate.get("model_uri", ""))
@@ -1947,22 +2022,16 @@ class JobViewSet(viewsets.GenericViewSet, mixins.ListModelMixin, mixins.CreateMo
     @action(detail=True, methods=["GET"], url_path="auto-annotate-models")
     def auto_annotate_models(self, request: ExtendedRequest, pk: int):
         db_job = self.get_object()
-        task_label_names = {
-            str(label.name or "").strip()
-            for label in db_job.get_labels()
-            if str(label.name or "").strip()
-        }
+        task_label_names = sorted(
+            {
+                str(label.name or "").strip()
+                for label in db_job.get_labels()
+                if str(label.name or "").strip()
+            }
+        )
         models = []
 
-        for model in settings.LUX_YOLOV7_MODELS:
-            labels = [
-                str(label).strip()
-                for label in model.get("labels", [])
-                if str(label).strip()
-            ]
-            if labels and not set(labels).issubset(task_label_names):
-                continue
-
+        for model in self._available_lux_yolov7_models(db_job):
             models.append(
                 {
                     "id": model.get("id", ""),
@@ -1972,7 +2041,13 @@ class JobViewSet(viewsets.GenericViewSet, mixins.ListModelMixin, mixins.CreateMo
                     "dataset_family_id": model.get("dataset_family_id", ""),
                     "family_key": model.get("family_key", ""),
                     "model_uri": model.get("model_uri", ""),
-                    "labels": labels,
+                    "labels": model.get("labels", []),
+                    "source_kind": model.get("source_kind", "legacy"),
+                    "registry_status": model.get("registry_status", ""),
+                    "slot_status": model.get("slot_status", ""),
+                    "slot_display_name": model.get("slot_display_name", ""),
+                    "model_version_id": model.get("model_version_id", ""),
+                    "architecture": model.get("architecture", ""),
                 }
             )
 
