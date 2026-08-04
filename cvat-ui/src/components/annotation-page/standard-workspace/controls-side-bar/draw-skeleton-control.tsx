@@ -1,6 +1,15 @@
+// Copyright (C) 2020-2022 Intel Corporation
+// Copyright (C) CVAT.ai Corporation
+//
+// SPDX-License-Identifier: MIT
+
 import React from 'react';
 import Popover from 'antd/lib/popover';
 import Icon from '@ant-design/icons';
+
+import { CombinedState } from 'reducers';
+import CVATTooltip from 'components/common/cvat-tooltip';
+import { useSelector } from 'react-redux';
 
 import { Canvas } from 'cvat-canvas-wrapper';
 import { Canvas3d } from 'cvat-canvas3d-wrapper';
@@ -20,6 +29,9 @@ export interface Props {
 const CustomPopover = withVisibilityHandling(Popover, 'draw-skeleton');
 function DrawSkeletonControl(props: Props): JSX.Element {
     const { canvasInstance, isDrawing, disabled } = props;
+
+    const { normalizedKeyMap } = useSelector((state: CombinedState) => state.shortcuts);
+
     const dynamicPopoverProps = isDrawing ? {
         overlayStyle: {
             display: 'none',
@@ -38,14 +50,22 @@ function DrawSkeletonControl(props: Props): JSX.Element {
     return disabled ? (
         <Icon className='cvat-draw-skeleton-control cvat-disabled-canvas-control' component={SkeletonIcon} />
     ) : (
-        <CustomPopover
-            {...dynamicPopoverProps}
-            overlayClassName='cvat-draw-shape-popover'
+        <CVATTooltip
+            title={`Draw a skeleton. ${
+                canvasInstance instanceof Canvas ?
+                    normalizedKeyMap.SWITCH_DRAW_MODE_STANDARD_CONTROLS :
+                    normalizedKeyMap.SWITCH_DRAW_MODE_STANDARD_3D_CONTROLS} repeats last drawing action`}
             placement='right'
-            content={<DrawShapePopoverContainer shapeType={ShapeType.SKELETON} />}
         >
-            <Icon {...dynamicIconProps} component={SkeletonIcon} />
-        </CustomPopover>
+            <CustomPopover
+                {...dynamicPopoverProps}
+                overlayClassName='cvat-draw-shape-popover'
+                placement='right'
+                content={<DrawShapePopoverContainer shapeType={ShapeType.SKELETON} />}
+            >
+                <Icon {...dynamicIconProps} component={SkeletonIcon} />
+            </CustomPopover>
+        </CVATTooltip>
     );
 }
 

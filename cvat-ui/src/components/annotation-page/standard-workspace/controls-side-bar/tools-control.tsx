@@ -1603,15 +1603,20 @@ export class ToolsControlComponent extends React.PureComponent<Props, State> {
 
         return showAnyContent ? (
             <>
-                <CustomPopover
-                    {...dynamicPopoverProps}
+                <CVATTooltip
+                    title='AI Tools'
                     placement='right'
-                    content={this.renderPopoverContent()}
-                    open={toolsPopoverOpen}
-                    onOpenChange={(open: boolean) => this.setState({ toolsPopoverOpen: open })}
                 >
-                    <Icon {...dynamicIconProps} component={AIToolsIcon} />
-                </CustomPopover>
+                    <CustomPopover
+                        {...dynamicPopoverProps}
+                        placement='right'
+                        content={this.renderPopoverContent()}
+                        open={toolsPopoverOpen}
+                        onOpenChange={(open: boolean) => this.setState({ toolsPopoverOpen: open })}
+                    >
+                        <Icon {...dynamicIconProps} component={AIToolsIcon} />
+                    </CustomPopover>
+                </CVATTooltip>
                 {interactionContent}
                 {detectionContent}
                 {samServiceContent}

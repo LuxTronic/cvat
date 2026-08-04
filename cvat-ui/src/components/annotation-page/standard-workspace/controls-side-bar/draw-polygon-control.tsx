@@ -6,6 +6,10 @@ import React from 'react';
 import Popover from 'antd/lib/popover';
 import Icon from '@ant-design/icons';
 
+import { CombinedState } from 'reducers';
+import CVATTooltip from 'components/common/cvat-tooltip';
+import { useSelector } from 'react-redux';
+
 import { Canvas } from 'cvat-canvas-wrapper';
 import { PolygonIcon } from 'icons';
 import { ShapeType } from 'cvat-core-wrapper';
@@ -22,6 +26,9 @@ export interface Props {
 const CustomPopover = withVisibilityHandling(Popover, 'draw-polygon');
 function DrawPolygonControl(props: Props): JSX.Element {
     const { canvasInstance, isDrawing, disabled } = props;
+
+    const { normalizedKeyMap } = useSelector((state: CombinedState) => state.shortcuts);
+
     const dynamicPopoverProps = isDrawing ? {
         overlayStyle: {
             display: 'none',
@@ -40,14 +47,19 @@ function DrawPolygonControl(props: Props): JSX.Element {
     return disabled ? (
         <Icon className='cvat-draw-polygon-control cvat-disabled-canvas-control' component={PolygonIcon} />
     ) : (
-        <CustomPopover
-            {...dynamicPopoverProps}
-            overlayClassName='cvat-draw-shape-popover'
+        <CVATTooltip
+            title={`Draw a polygon. ${normalizedKeyMap.SWITCH_DRAW_MODE_STANDARD_CONTROLS} repeats last drawing action`}
             placement='right'
-            content={<DrawShapePopoverContainer shapeType={ShapeType.POLYGON} />}
         >
-            <Icon {...dynamicIconProps} component={PolygonIcon} />
-        </CustomPopover>
+            <CustomPopover
+                {...dynamicPopoverProps}
+                overlayClassName='cvat-draw-shape-popover'
+                placement='right'
+                content={<DrawShapePopoverContainer shapeType={ShapeType.POLYGON} />}
+            >
+                <Icon {...dynamicIconProps} component={PolygonIcon} />
+            </CustomPopover>
+        </CVATTooltip>
     );
 }
 

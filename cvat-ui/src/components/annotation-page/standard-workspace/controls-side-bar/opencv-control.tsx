@@ -555,28 +555,33 @@ class OpenCVControlComponent extends React.PureComponent<Props & DispatchToProps
             <Icon className='cvat-opencv-control cvat-disabled-canvas-control' component={OpenCVIcon} />
         ) : (
             <>
-                <CustomPopover
-                    {...dynamicPopoverProps}
+                <CVATTooltip
+                    title='OpenCV'
                     placement='right'
-                    overlayClassName='cvat-opencv-control-popover'
-                    content={this.renderContent()}
-                    onOpenChange={(visible: boolean) => {
-                        const { initializationProgress } = this.state;
-                        if (!visible || initializationProgress >= 0) return;
-
-                        if (!openCVWrapper.isInitialized || openCVWrapper.initializationInProgress) {
-                            this.initializeOpenCV();
-                        } else if (libraryInitialized !== openCVWrapper.isInitialized) {
-                            this.setState({
-                                libraryInitialized: openCVWrapper.isInitialized,
-                                trackers: Object.values(openCVWrapper.tracking),
-                                activeTracker: Object.values(openCVWrapper.tracking)[0] || null,
-                            });
-                        }
-                    }}
                 >
-                    <Icon {...dynamicIconProps} component={OpenCVIcon} />
-                </CustomPopover>
+                    <CustomPopover
+                        {...dynamicPopoverProps}
+                        placement='right'
+                        overlayClassName='cvat-opencv-control-popover'
+                        content={this.renderContent()}
+                        onOpenChange={(visible: boolean) => {
+                            const { initializationProgress } = this.state;
+                            if (!visible || initializationProgress >= 0) return;
+
+                            if (!openCVWrapper.isInitialized || openCVWrapper.initializationInProgress) {
+                                this.initializeOpenCV();
+                            } else if (libraryInitialized !== openCVWrapper.isInitialized) {
+                                this.setState({
+                                    libraryInitialized: openCVWrapper.isInitialized,
+                                    trackers: Object.values(openCVWrapper.tracking),
+                                    activeTracker: Object.values(openCVWrapper.tracking)[0] || null,
+                                });
+                            }
+                        }}
+                    >
+                        <Icon {...dynamicIconProps} component={OpenCVIcon} />
+                    </CustomPopover>
+                </CVATTooltip>
                 {isActivated ? (
                     <ApproximationAccuracy
                         approxPolyAccuracy={approxPolyAccuracy}
