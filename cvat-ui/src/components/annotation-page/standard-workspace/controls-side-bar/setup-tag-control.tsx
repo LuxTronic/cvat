@@ -6,6 +6,8 @@ import React from 'react';
 import Popover from 'antd/lib/popover';
 import Icon from '@ant-design/icons';
 
+import CVATTooltip from 'components/common/cvat-tooltip';
+
 import { Canvas } from 'cvat-canvas-wrapper';
 import { TagIcon } from 'icons';
 
@@ -24,9 +26,14 @@ function SetupTagControl(props: Props): JSX.Element {
     return disabled ? (
         <Icon className='cvat-setup-tag-control cvat-disabled-canvas-control' component={TagIcon} />
     ) : (
-        <CustomPopover placement='right' content={<SetupTagPopoverContainer />}>
-            <Icon className='cvat-setup-tag-control' component={TagIcon} />
-        </CustomPopover>
+        <CVATTooltip
+            title='Setup tag'
+            placement='right'
+        >
+            <CustomPopover placement='right' content={<SetupTagPopoverContainer />}>
+                <Icon className='cvat-setup-tag-control' component={TagIcon} />
+            </CustomPopover>
+        </CVATTooltip>
     );
 }
 

@@ -6,6 +6,10 @@ import React from 'react';
 import Popover from 'antd/lib/popover';
 import Icon from '@ant-design/icons';
 
+import { CombinedState } from 'reducers';
+import CVATTooltip from 'components/common/cvat-tooltip';
+import { useSelector } from 'react-redux';
+
 import { Canvas } from 'cvat-canvas-wrapper';
 import { PointIcon } from 'icons';
 import { ShapeType } from 'cvat-core-wrapper';
@@ -22,6 +26,9 @@ export interface Props {
 const CustomPopover = withVisibilityHandling(Popover, 'draw-points');
 function DrawPointsControl(props: Props): JSX.Element {
     const { canvasInstance, isDrawing, disabled } = props;
+
+    const { normalizedKeyMap } = useSelector((state: CombinedState) => state.shortcuts);
+
     const dynamicPopoverProps = isDrawing ? {
         overlayStyle: {
             display: 'none',
@@ -40,14 +47,19 @@ function DrawPointsControl(props: Props): JSX.Element {
     return disabled ? (
         <Icon className='cvat-draw-points-control cvat-disabled-canvas-control' component={PointIcon} />
     ) : (
-        <CustomPopover
-            {...dynamicPopoverProps}
-            overlayClassName='cvat-draw-shape-popover'
+        <CVATTooltip
+            title={`Draw points. ${normalizedKeyMap.SWITCH_DRAW_MODE_STANDARD_CONTROLS} repeats last drawing action`}
             placement='right'
-            content={<DrawShapePopoverContainer shapeType={ShapeType.POINTS} />}
         >
-            <Icon {...dynamicIconProps} component={PointIcon} />
-        </CustomPopover>
+            <CustomPopover
+                {...dynamicPopoverProps}
+                overlayClassName='cvat-draw-shape-popover'
+                placement='right'
+                content={<DrawShapePopoverContainer shapeType={ShapeType.POINTS} />}
+            >
+                <Icon {...dynamicIconProps} component={PointIcon} />
+            </CustomPopover>
+        </CVATTooltip>
     );
 }
 

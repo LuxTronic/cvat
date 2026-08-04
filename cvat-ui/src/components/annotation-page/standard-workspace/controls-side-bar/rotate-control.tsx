@@ -23,29 +23,34 @@ function RotateControl(props: Props): JSX.Element {
     const { anticlockwiseShortcut, clockwiseShortcut, rotateFrame } = props;
 
     return (
-        <CustomPopover
+        <CVATTooltip
+            title='Rotate the image'
             placement='right'
-            content={(
-                <>
-                    <CVATTooltip title={`Rotate the image anticlockwise ${anticlockwiseShortcut}`} placement='topRight'>
-                        <Icon
-                            className='cvat-rotate-canvas-controls-left'
-                            onClick={(): void => rotateFrame(Rotation.ANTICLOCKWISE90)}
-                            component={RotateIcon}
-                        />
-                    </CVATTooltip>
-                    <CVATTooltip title={`Rotate the image clockwise ${clockwiseShortcut}`} placement='topRight'>
-                        <Icon
-                            className='cvat-rotate-canvas-controls-right'
-                            onClick={(): void => rotateFrame(Rotation.CLOCKWISE90)}
-                            component={RotateIcon}
-                        />
-                    </CVATTooltip>
-                </>
-            )}
         >
-            <Icon className='cvat-rotate-canvas-control' component={RotateIcon} />
-        </CustomPopover>
+            <CustomPopover
+                placement='right'
+                content={(
+                    <>
+                        <CVATTooltip title={`Rotate the image anticlockwise ${anticlockwiseShortcut}`} placement='topRight'>
+                            <Icon
+                                className='cvat-rotate-canvas-controls-left'
+                                onClick={(): void => rotateFrame(Rotation.ANTICLOCKWISE90)}
+                                component={RotateIcon}
+                            />
+                        </CVATTooltip>
+                        <CVATTooltip title={`Rotate the image clockwise ${clockwiseShortcut}`} placement='topRight'>
+                            <Icon
+                                className='cvat-rotate-canvas-controls-right'
+                                onClick={(): void => rotateFrame(Rotation.CLOCKWISE90)}
+                                component={RotateIcon}
+                            />
+                        </CVATTooltip>
+                    </>
+                )}
+            >
+                <Icon className='cvat-rotate-canvas-control' component={RotateIcon} />
+            </CustomPopover>
+        </CVATTooltip>
     );
 }
 
