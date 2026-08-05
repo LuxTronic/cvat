@@ -1811,6 +1811,7 @@ class Asset(models.Model):
 
 class RequestAction(TextChoices):
     AUTOANNOTATE = "autoannotate"
+    GPTANNOTATE = "gptannotate"
     CREATE = "create"
     IMPORT = "import"
     EXPORT = "export"

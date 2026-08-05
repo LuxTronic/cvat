@@ -10,6 +10,7 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, Spec
 from rest_framework import routers
 
 from . import views
+from .model_annotation import ModelAnnotationViewSet
 
 router = routers.DefaultRouter(trailing_slash=False)
 router.register("projects", views.ProjectViewSet)
@@ -23,6 +24,7 @@ router.register("labels", views.LabelViewSet)
 router.register("cloudstorages", views.CloudStorageViewSet)
 router.register("assets", views.AssetsViewSet)
 router.register("guides", views.AnnotationGuidesViewSet)
+router.register("model", ModelAnnotationViewSet, basename="model")
 
 urlpatterns = [
     # Entry point for a client
