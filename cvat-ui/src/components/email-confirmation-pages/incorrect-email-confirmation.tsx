@@ -6,6 +6,7 @@ import React from 'react';
 import { Col, Row } from 'antd/lib/grid';
 import Layout from 'antd/lib/layout';
 import Button from 'antd/lib/button';
+import { withUIBasePath } from 'utils/base-path';
 import './styles.scss';
 
 const { Content } = Layout;
@@ -26,7 +27,7 @@ export default function IncorrectEmailConfirmationPage(): JSX.Element {
                         <p>
                             Please issue a new e-mail confirmation request.
                         </p>
-                        <Button className='cvat-go-to-login-button' type='link' href='/auth/login'>
+                        <Button className='cvat-go-to-login-button' type='link' href={withUIBasePath('/auth/login')}>
                             Go to login page
                         </Button>
                     </Col>

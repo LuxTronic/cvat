@@ -3,6 +3,8 @@
 //
 // SPDX-License-Identifier: MIT
 
+import { withUIBasePath } from './utils/base-path';
+
 const NO_BREAK_SPACE = '\u00a0';
 const UNDEFINED_ATTRIBUTE_VALUE = '__undefined__';
 const CHANGELOG_URL = 'https://github.com/cvat-ai/cvat/blob/develop/CHANGELOG.md';
@@ -110,7 +112,7 @@ const RESET_NOTIFICATIONS_PATHS = {
 const BUCKET_CONTENT_KEY = 'All files';
 
 const NUMERIC_VALUE_CLAMP_THRESHOLD = 5000;
-const OPENCV_PATH = '/assets/opencv_4.8.0.js';
+const OPENCV_PATH = withUIBasePath('/assets/opencv_4.8.0.js');
 
 const LOCAL_STORAGE_SEEN_GUIDES_MEMORY_LIMIT = 10;
 const LOCAL_STORAGE_LAST_FRAME_MEMORY_LIMIT = 20;

@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: MIT
 
 const fs = require('fs');
+const webpack = require('webpack');
 const path = require('path');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const Dotenv = require('dotenv-webpack');
@@ -41,6 +42,20 @@ module.exports = (env, argv = {}) => {
         console.log(`- ${entrypoint}`);
     }
 
+    // Base path CVAT is served under, e.g. '/cvat' when embedded in the Lux
+    // workbench. Empty means CVAT owns the site root.
+    const normalizeBasePath = (value) => {
+        if (!value || value === '/') {
+            return '';
+        }
+
+        const trimmed = value.replace(/^\/+|\/+$/g, '');
+        return trimmed ? `/${trimmed}` : '';
+    };
+
+    const basePath = normalizeBasePath(process.env.CVAT_UI_BASE_PATH ?? '');
+    console.log('UI base path: ', basePath || '/');
+
     const host = process.env.CVAT_UI_HOST ?? 'localhost';
     const port = process.env.CVAT_UI_PORT ?? 3000;
     return {
@@ -62,7 +77,7 @@ module.exports = (env, argv = {}) => {
         output: {
             path: path.resolve(__dirname, 'dist'),
             filename: 'assets/[name].[contenthash].min.js',
-            publicPath: '/',
+            publicPath: basePath ? `${basePath}/` : '/',
         },
         devServer: {
             host,
@@ -202,6 +217,12 @@ module.exports = (env, argv = {}) => {
             }),
             new Dotenv({
                 systemvars: true,
+            }),
+            // Dotenv only defines vars that are actually present in the build
+            // environment; define this one unconditionally so the bundle never
+            // ends up with a bare `process.env` reference.
+            new webpack.DefinePlugin({
+                'process.env.CVAT_UI_BASE_PATH': JSON.stringify(basePath),
             }),
             new CopyPlugin({
                 patterns: [
