@@ -7,11 +7,30 @@ from __future__ import annotations
 from enum import Enum
 from functools import cached_property
 
+import attrs
 from django.contrib.auth.models import User
 from django.db import models
 
 from cvat.apps.engine.models import Project, TimestampedModel
 from cvat.apps.organizations.models import Organization
+
+
+@attrs.define(frozen=True)
+class EventGroup:
+    display_name: str
+
+
+@attrs.define(frozen=True)
+class Event:
+    action: str
+    resource: str
+    group: EventGroup
+
+    @property
+    def key(self) -> str:
+        from cvat.apps.webhooks.event_type import event_key
+
+        return event_key(action=self.action, resource=self.resource)
 
 
 class WebhookTypeChoice(str, Enum):
@@ -68,7 +87,7 @@ class Webhook(TimestampedModel):
         constraints = [
             models.CheckConstraint(
                 name="webhooks_project_or_organization",
-                check=(
+                condition=(
                     models.Q(type=WebhookTypeChoice.PROJECT.value, project_id__isnull=False)
                     | models.Q(
                         type=WebhookTypeChoice.ORGANIZATION.value,
@@ -90,6 +109,9 @@ class WebhookDelivery(TimestampedModel):
 
     status_code = models.PositiveIntegerField(null=True, default=None)
     redelivery = models.BooleanField(default=False)
+
+    attempt = models.PositiveIntegerField(null=True)
+    request_duration = models.PositiveIntegerField(null=True)
 
     changed_fields = models.CharField(max_length=4096, default="")
 

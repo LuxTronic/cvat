@@ -83,15 +83,9 @@ To backup DB and data volume, please use commands below.
 
 ```console
 cd tests/python
-docker exec test_cvat_server_1 python manage.py dumpdata --indent 2 --natural-foreign \
-    --exclude=admin --exclude=auth.permission --exclude=authtoken --exclude=contenttypes \
-    --exclude=django_rq --exclude=sessions \
-    > shared/assets/cvat_db/data.json
+python shared/utils/dump_test_db.py
 docker exec test_cvat_server_1 tar --exclude "/home/django/data/cache" -cjv /home/django/data > shared/assets/cvat_db/cvat_data.tar.bz2
 ```
-
-> Note: if you won't be use --indent options or will be use with other value
-> it potentially will lead to problems with merging of this file with other branch.
 
 ## How to update *.json files in the assets directory?
 
@@ -109,7 +103,7 @@ python shared/utils/dump_objects.py
 To restore DB and data volume, please use commands below.
 
 ```console
-cat shared/assets/cvat_db/data.json | docker exec -i test_cvat_server_1 python manage.py loaddata --format=json -
+cat shared/assets/cvat_db/data.json | docker exec -i test_cvat_server_1 python manage.py loaddata_sorted
 cat shared/assets/cvat_db/cvat_data.tar.bz2 | docker exec -i test_cvat_server_1 tar --strip 3 -C /home/django/data/ -xj
 ```
 
@@ -165,15 +159,6 @@ Assets directory has two parts:
    then better to choose `admin1` user for creating new resource.
 
 ## Troubleshooting
-
-1. If your test session was exit with message:
-   ```
-   _pytest.outcomes.Exit: Command failed: ... Add `-s` option to see more details.
-   ```
-   Rerun tests to see error messages:
-   ```
-   pytest ./tests/python/rest_api -s
-   ```
 
 1. If your tests was failed due to date field incompatibility and you have
    error message like this:

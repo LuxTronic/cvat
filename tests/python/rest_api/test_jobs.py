@@ -28,7 +28,7 @@ from PIL import Image
 from pytest_cases import parametrize
 
 from shared.tasks.utils import parse_frame_step
-from shared.utils.config import make_api_client
+from shared.utils.config import get_method, make_api_client, patch_method
 from shared.utils.helpers import generate_image_files
 
 from .utils import (
@@ -543,6 +543,40 @@ class TestDeleteJobs:
 
 @pytest.mark.usefixtures("restore_db_per_class")
 class TestGetJobs:
+    def _compute_expected_task_project_names(
+        self, user_id, job, tasks, projects, is_task_staff, is_project_staff, org_staff
+    ):
+        task = tasks[job["task_id"]]
+        task_org = task.get("organization")
+        task_org_staff = org_staff(task_org) if task_org else set()
+
+        can_view_task = user_id in task_org_staff or is_task_staff(user_id, task["id"])
+
+        result = {"task_name": task["name"] if can_view_task else None}
+
+        project_id = job.get("project_id")
+        if project_id:
+            project = projects[project_id]
+            project_org = project.get("organization")
+            project_org_staff = org_staff(project_org) if project_org else set()
+
+            can_view_project = user_id in project_org_staff or is_project_staff(user_id, project_id)
+            result["project_name"] = project["name"] if can_view_project else None
+        else:
+            result["project_name"] = None
+
+        return result
+
+    def _get_expected_job_data(
+        self, user_id, job, tasks, projects, is_task_staff, is_project_staff, org_staff
+    ):
+        expected_job = deepcopy(job)
+        names = self._compute_expected_task_project_names(
+            user_id, job, tasks, projects, is_task_staff, is_project_staff, org_staff
+        )
+        expected_job.update(names)
+        return expected_job
+
     def _test_get_job_200(
         self, user, jid, *, expected_data: dict[str, Any] | None = None, **kwargs
     ):
@@ -570,7 +604,16 @@ class TestGetJobs:
 
     @pytest.mark.parametrize("groups", [["user"]])
     def test_non_admin_org_staff_can_get_job(
-        self, groups, users, organizations, org_staff, jobs_by_org
+        self,
+        groups,
+        users,
+        organizations,
+        org_staff,
+        jobs_by_org,
+        tasks,
+        projects,
+        is_task_staff,
+        is_project_staff,
     ):
         user, org_id = next(
             (user, org["id"])
@@ -579,17 +622,38 @@ class TestGetJobs:
             if user["groups"] == groups and user["id"] in org_staff(org["id"])
         )
         job = jobs_by_org[org_id][0]
-        self._test_get_job_200(user["username"], job["id"], expected_data=job)
+
+        expected_job = self._get_expected_job_data(
+            user["id"], job, tasks, projects, is_task_staff, is_project_staff, org_staff
+        )
+
+        self._test_get_job_200(user["username"], job["id"], expected_data=expected_job)
 
     @pytest.mark.parametrize("groups", [["user"], ["worker"]])
-    def test_non_admin_job_staff_can_get_job(self, groups, users, jobs, is_job_staff):
+    def test_non_admin_job_staff_can_get_job(
+        self,
+        groups,
+        users,
+        jobs,
+        tasks,
+        projects,
+        is_job_staff,
+        is_task_staff,
+        is_project_staff,
+        org_staff,
+    ):
         user, job = next(
             (user, job)
             for user in users
             for job in jobs
             if user["groups"] == groups and is_job_staff(user["id"], job["id"])
         )
-        self._test_get_job_200(user["username"], job["id"], expected_data=job)
+
+        expected_job = self._get_expected_job_data(
+            user["id"], job, tasks, projects, is_task_staff, is_project_staff, org_staff
+        )
+
+        self._test_get_job_200(user["username"], job["id"], expected_data=expected_job)
 
     @pytest.mark.parametrize("groups", [["user"], ["worker"]])
     def test_non_admin_non_job_staff_non_org_staff_cannot_get_job(
@@ -607,7 +671,9 @@ class TestGetJobs:
         self._test_get_job_403(user["username"], job_id)
 
     @pytest.mark.usefixtures("restore_db_per_function")
-    def test_can_get_gt_job_in_sandbox_task(self, tasks, jobs, users, admin_user):
+    def test_can_get_gt_job_in_sandbox_task(
+        self, tasks, jobs, users, projects, admin_user, is_task_staff, is_project_staff, org_staff
+    ):
         task = next(
             t
             for t in tasks
@@ -616,6 +682,7 @@ class TestGetJobs:
             and not users[t["owner"]["id"]]["is_superuser"]
         )
         user = task["owner"]["username"]
+        user_id = task["owner"]["id"]
 
         job_spec = {
             "task_id": task["id"],
@@ -625,9 +692,14 @@ class TestGetJobs:
         }
 
         with make_api_client(admin_user) as api_client:
-            job, _ = api_client.jobs_api.create(job_spec)
+            _, response = api_client.jobs_api.create(job_spec)
+            job = json.loads(response.data)
 
-        self._test_get_job_200(user, job.id)
+        expected_job = self._get_expected_job_data(
+            user_id, job, tasks, projects, is_task_staff, is_project_staff, org_staff
+        )
+
+        self._test_get_job_200(user, job["id"], expected_data=expected_job)
 
     @pytest.mark.usefixtures("restore_db_per_function")
     @pytest.mark.parametrize(
@@ -648,8 +720,11 @@ class TestGetJobs:
         tasks,
         jobs,
         users,
+        projects,
         is_org_member,
         is_task_staff,
+        is_project_staff,
+        org_staff,
         org_role,
         is_staff,
         allow,
@@ -684,7 +759,11 @@ class TestGetJobs:
             job = json.loads(response.data)
 
         if allow:
-            self._test_get_job_200(user["username"], job["id"], expected_data=job)
+            expected_job = self._get_expected_job_data(
+                user["id"], job, tasks, projects, is_task_staff, is_project_staff, org_staff
+            )
+
+            self._test_get_job_200(user["username"], job["id"], expected_data=expected_job)
         else:
             self._test_get_job_403(user["username"], job["id"])
 
@@ -758,7 +837,6 @@ class TestGetGtJobData:
             admin_user,
             spec={
                 "name": "test complex frame setup",
-                "labels": [{"name": "cat"}],
             },
             data={
                 "image_quality": 75,
@@ -941,7 +1019,18 @@ class TestListJobs:
             results = get_paginated_collection(
                 client.jobs_api.list_endpoint, return_json=True, **kwargs
             )
-            assert DeepDiff(data, results, ignore_order=True) == {}
+            assert (
+                DeepDiff(
+                    data,
+                    results,
+                    ignore_order=True,
+                    exclude_regex_paths=[
+                        r"root\[\d+\]\['task_name'\]",
+                        r"root\[\d+\]\['project_name'\]",
+                    ],
+                )
+                == {}
+            )
 
     def _test_list_jobs_403(self, user, **kwargs):
         with make_api_client(user) as client:
@@ -991,12 +1080,17 @@ class TestJobsListFilters(CollectionSimpleFilterTestBase):
         "field",
         (
             "assignee",
-            "state",
-            "stage",
-            "task_id",
-            "project_id",
-            "type",
+            "dimension",
+            "media_type",
+            "mode",
             "parent_job_id",
+            "project_id",
+            "project_name",
+            "stage",
+            "state",
+            "task_id",
+            "task_name",
+            "type",
         ),
     )
     def test_can_use_simple_filter_for_object_list(self, field):
@@ -1253,6 +1347,52 @@ class TestPatchJobAnnotations:
         job = next(j for j in jobs_with_shapes if j["type"] == job_type)
         data = request_data(job["id"])
         self._check_response(admin_user, job["id"], True, data)
+
+    def test_can_autofix_annotation_source_for_updated_annotations(self, admin_user):
+        # Backward compatibility test for https://github.com/cvat-ai/cvat/issues/8874
+
+        jid = 19
+
+        response = get_method(admin_user, f"jobs/{jid}/annotations")
+        response.raise_for_status()
+        response = response.json()
+
+        modified_shape = next(s for s in response["shapes"] if s["type"] == "rectangle")
+        modified_shape["points"] = [1, 2, 3, 4]
+        modified_shape["source"] = "Ground truth"
+
+        payload = {"shapes": [s for s in response["shapes"] if s["id"] != modified_shape["id"]]}
+        response = patch_method(admin_user, f"jobs/{jid}/annotations", payload, action="delete")
+        response.raise_for_status()
+        response = response.json()
+        assert len(response["shapes"]) == 1
+
+        payload = {"shapes": [modified_shape]}
+        response = patch_method(admin_user, f"jobs/{jid}/annotations", payload, action="update")
+        response.raise_for_status()
+        response = response.json()
+        assert len(response["shapes"]) == 1
+        assert response["shapes"][0]["source"] == "manual"
+        assert response["shapes"][0]["points"] == modified_shape["points"]
+
+    def test_can_check_annotation_source(self, admin_user):
+        # Regression test for https://github.com/cvat-ai/cvat/issues/8874
+
+        jid = 19
+
+        response = get_method(admin_user, f"jobs/{jid}/annotations")
+        response.raise_for_status()
+        response = response.json()
+
+        new_shape = next(s for s in response["shapes"] if s["type"] == "rectangle")
+        del new_shape["id"]
+        new_shape["points"] = [1, 2, 3, 4]
+        new_shape["source"] = "Ground truth"
+
+        payload = {"shapes": [new_shape]}
+        response = patch_method(admin_user, f"jobs/{jid}/annotations", payload, action="update")
+        assert response.status_code == HTTPStatus.BAD_REQUEST
+        assert b"must be one of" in response.content
 
 
 @pytest.mark.usefixtures("restore_db_per_function")

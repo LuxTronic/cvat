@@ -9,7 +9,9 @@ import { useHistory } from 'react-router';
 
 import { Row, Col } from 'antd/lib/grid';
 import Popover from 'antd/lib/popover';
-import { LoadingOutlined, PlusOutlined, UploadOutlined } from '@ant-design/icons';
+import {
+    LoadingOutlined, PlusOutlined, SoundOutlined, UploadOutlined,
+} from '@ant-design/icons';
 import Button from 'antd/lib/button';
 import Input from 'antd/lib/input';
 import { importActions } from 'actions/import-actions';
@@ -24,6 +26,7 @@ import { usePrevious } from 'utils/hooks';
 import { MultiPlusIcon } from 'icons';
 import dimensions from 'utils/dimensions';
 import CvatDropdownMenuPaper from 'components/common/cvat-dropdown-menu-paper';
+import TasksCSVExportButton from './tasks-csv-export-button';
 import {
     localStorageRecentKeyword, localStorageRecentCapacity, predefinedFilterValues, config,
 } from './tasks-filter-configuration';
@@ -59,7 +62,7 @@ export default function TopBarComponent(props: Readonly<VisibleTopBarProps>): JS
     }, [importing]);
 
     return (
-        <Row className='cvat-tasks-page-top-bar' justify='center' align='middle'>
+        <Row className='cvat-tasks-page-top-bar cvat-resource-top-bar-wrapper' justify='center' align='middle'>
             <Col {...dimensions}>
                 <div className='cvat-tasks-page-filters-wrapper'>
                     <div>
@@ -81,7 +84,8 @@ export default function TopBarComponent(props: Readonly<VisibleTopBarProps>): JS
                                 setVisibility({ ...defaultVisibility, sorting: visible })
                             )}
                             defaultFields={query.sort?.split(',') || ['-ID']}
-                            sortingFields={['ID', 'Owner', 'Status', 'Assignee', 'Updated date', 'Subset', 'Mode', 'Dimension', 'Project ID', 'Name', 'Project name']}
+                            sortingFields={['ID', 'Owner', 'Status', 'Assignee', 'Updated date', 'Subset',
+                                'Mode', 'Dimension', 'Project ID', 'Name', 'Project name']}
                             onApplySorting={onApplySorting}
                         />
                         <FilteringComponent
@@ -100,6 +104,7 @@ export default function TopBarComponent(props: Readonly<VisibleTopBarProps>): JS
                             )}
                             onApplyFilter={onApplyFilter}
                         />
+                        <TasksCSVExportButton query={query} />
                     </div>
                 </div>
                 <div>
@@ -116,6 +121,14 @@ export default function TopBarComponent(props: Readonly<VisibleTopBarProps>): JS
                                     icon={<PlusOutlined />}
                                 >
                                     Create a new task
+                                </Button>
+                                <Button
+                                    className='cvat-create-audio-task-button'
+                                    type='primary'
+                                    onClick={(): void => history.push('/tasks/create?type=audio')}
+                                    icon={<SoundOutlined />}
+                                >
+                                    Create a new audio task
                                 </Button>
                                 <Button
                                     className='cvat-create-multi-tasks-button'

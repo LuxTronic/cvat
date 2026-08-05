@@ -3,9 +3,18 @@
 // SPDX-License-Identifier: MIT
 
 import { LRUCache } from 'lru-cache';
-import { CVATCore, MLModel, Job } from 'cvat-core-wrapper';
+import {
+    type CVATCore,
+    type MLModel,
+    type Job,
+    type InteractorResults,
+    Source,
+    ShapeType,
+} from 'cvat-core-wrapper';
 import { PluginEntryPoint, APIWrapperEnterOptions, ComponentBuilder } from 'components/plugins-entrypoint';
-import { InitBody, DecodeBody, WorkerAction } from './inference.worker';
+import {
+    InitBody, DecodeBody, WorkerAction, SAMOutputItem,
+} from './inference.worker';
 
 interface SAMPlugin {
     name: string;
@@ -47,10 +56,11 @@ interface SAMPlugin {
         modelURL: string;
         embeddings: LRUCache<string, Float32Array>;
         lowResMasks: LRUCache<string, Float32Array>;
+        lastROIs: Record<string, string>;
         lastClicks: ClickType[];
     };
     callbacks: {
-        onStatusChange: ((status: string) => void) | null;
+        mask2Rle: ((points: Uint8ClampedArray) => number[]) | null;
     };
 }
 
@@ -60,23 +70,14 @@ interface ClickType {
     y: number;
 }
 
-function toMatImage(input: number[], width: number, height: number): number[][] {
-    const image = Array(height).fill(0);
-    for (let i = 0; i < image.length; i++) {
-        image[i] = Array(width).fill(0);
-    }
+type ROI = [number, number, number, number]; // [xtl, ytl, xbr, ybr]
 
-    for (let i = 0; i < input.length; i++) {
-        const row = Math.floor(i / width);
-        const col = i % width;
-        image[row][col] = input[i] > 0 ? 255 : 0;
-    }
-
-    return image;
+function buildROISignature(roi?: ROI): string {
+    return roi ? `${roi[0]}_${roi[1]}_${roi[2]}_${roi[3]}` : 'full';
 }
 
-function onnxToImage(input: any, width: number, height: number): number[][] {
-    return toMatImage(input, width, height);
+function optTranslatePrompts(points: number[][], roi?: ROI): number[][] {
+    return roi ? points.map((point) => [point[0] - roi[0], point[1] - roi[1]]) : points;
 }
 
 function getModelScale(w: number, h: number): number {
@@ -137,11 +138,19 @@ const samPlugin: SAMPlugin = {
                 async enter(
                     plugin: SAMPlugin,
                     taskID: number,
-                    model: MLModel, { frame }: { frame: number; },
+                    model: MLModel, { frame, roi }: { frame: number; roi?: ROI },
                 ): Promise<null | APIWrapperEnterOptions> {
                     return new Promise((resolve, reject) => {
                         function resolvePromise(): void {
                             const key = `${taskID}_${frame}`;
+
+                            if (plugin.data.lastROIs[key] !== buildROISignature(roi)) {
+                                plugin.data.embeddings.delete(key);
+                                plugin.data.lowResMasks.delete(key);
+                                plugin.data.lastClicks = [];
+                                delete plugin.data.lastROIs[key];
+                            }
+
                             if (plugin.data.embeddings.has(key)) {
                                 resolve({ preventMethodCall: true });
                             } else {
@@ -187,17 +196,18 @@ const samPlugin: SAMPlugin = {
                     taskID: number,
                     model: MLModel,
                     {
-                        frame, pos_points, neg_points, obj_bbox,
+                        frame, pos_points, neg_points, obj_bbox, roi,
                     }: {
                         frame: number;
                         pos_points: number[][];
                         neg_points: number[][];
                         obj_bbox: number[][];
+                        roi?: ROI;
                     },
                 ): Promise<{
-                        mask: number[][];
-                        bounds: [number, number, number, number];
-                    } | unknown> {
+                    mask: number[][];
+                    bounds: [number, number, number, number];
+                } | unknown> {
                     return new Promise((resolve, reject) => {
                         if (model.id !== plugin.data.modelID) {
                             resolve(result);
@@ -220,6 +230,11 @@ const samPlugin: SAMPlugin = {
                         job.frames.get(frame)
                             .then(({ height: imHeight, width: imWidth }: { height: number; width: number }) => {
                                 const key = `${taskID}_${frame}`;
+                                const inputWidth = roi ? roi[2] - roi[0] : imWidth;
+                                const inputHeight = roi ? roi[3] - roi[1] : imHeight;
+                                const inputPosPoints = optTranslatePrompts(pos_points, roi);
+                                const inputNegPoints = optTranslatePrompts(neg_points, roi);
+                                const inputObjBbox = optTranslatePrompts(obj_bbox, roi);
 
                                 if (result) {
                                     const bin = window.atob((result as { blob: string }).blob);
@@ -227,20 +242,22 @@ const samPlugin: SAMPlugin = {
                                     for (let i = 0; i < bin.length; i++) {
                                         bytes[i] = bin.charCodeAt(i);
                                     }
+
+                                    plugin.data.lastROIs[key] = buildROISignature(roi);
                                     plugin.data.embeddings.set(key, new Float32Array(bytes.buffer));
                                 }
 
                                 const clicks: ClickType[] = [];
-                                if (obj_bbox.length) {
-                                    clicks.push({ clickType: 2, x: obj_bbox[0][0], y: obj_bbox[0][1] });
-                                    clicks.push({ clickType: 3, x: obj_bbox[1][0], y: obj_bbox[1][1] });
+                                if (inputObjBbox.length) {
+                                    clicks.push({ clickType: 2, x: inputObjBbox[0][0], y: inputObjBbox[0][1] });
+                                    clicks.push({ clickType: 3, x: inputObjBbox[1][0], y: inputObjBbox[1][1] });
                                 }
 
-                                pos_points.forEach((point) => {
+                                inputPosPoints.forEach((point) => {
                                     clicks.push({ clickType: 1, x: point[0], y: point[1] });
                                 });
 
-                                neg_points.forEach((point) => {
+                                inputNegPoints.forEach((point) => {
                                     clicks.push({ clickType: 0, x: point[0], y: point[1] });
                                 });
 
@@ -254,9 +271,9 @@ const samPlugin: SAMPlugin = {
                                         lowResMask: isLowResMaskRelevant ?
                                             plugin.data.lowResMasks.get(key) ?? null : null,
                                         modelScale: {
-                                            width: imWidth,
-                                            height: imHeight,
-                                            scale: getModelScale(imWidth, imHeight),
+                                            width: inputWidth,
+                                            height: inputHeight,
+                                            scale: getModelScale(inputWidth, inputHeight),
                                         },
                                         clicks,
                                     }),
@@ -270,17 +287,37 @@ const samPlugin: SAMPlugin = {
                                     }
 
                                     if (!e.data.error) {
-                                        const {
-                                            mask, lowResMask, xtl, ytl, xbr, ybr,
-                                        } = e.data.payload;
-                                        const imageData = onnxToImage(mask, xbr - xtl + 1, ybr - ytl + 1);
-                                        plugin.data.lowResMasks.set(key, lowResMask);
+                                        const payload = e.data.payload as SAMOutputItem[];
                                         plugin.data.lastClicks = clicks;
 
                                         resolve({
-                                            mask: imageData,
-                                            bounds: [xtl, ytl, xbr, ybr],
-                                        });
+                                            shapes: payload.map((item) => {
+                                                const { mask_input: maskInput, bounds } = item;
+                                                let rle = plugin.callbacks.mask2Rle!(item.points);
+                                                if (rle.length < 2) {
+                                                    rle = [0, 0, 0, 0, 0];
+                                                } else {
+                                                    if (roi) {
+                                                        bounds[0] += roi[0];
+                                                        bounds[1] += roi[1];
+                                                        bounds[2] += roi[0];
+                                                        bounds[3] += roi[1];
+                                                    }
+                                                    rle.push(...bounds);
+                                                }
+
+                                                plugin.data.lowResMasks.set(key, maskInput);
+                                                return {
+                                                    points: rle,
+                                                    group: 0,
+                                                    source: Source.SEMI_AUTO,
+                                                    occluded: false,
+                                                    rotation: 0,
+                                                    type: ShapeType.MASK,
+                                                    attributes: [],
+                                                };
+                                            }),
+                                        } as InteractorResults);
                                     } else {
                                         reject(new Error(`Decoder error. ${e.data.error}`));
                                     }
@@ -314,15 +351,17 @@ const samPlugin: SAMPlugin = {
             updateAgeOnGet: true,
             updateAgeOnHas: true,
         }),
+        lastROIs: {},
         lastClicks: [],
     },
     callbacks: {
-        onStatusChange: null,
+        mask2Rle: null,
     },
 };
 
 const builder: ComponentBuilder = ({ core }) => {
     samPlugin.data.core = core;
+    samPlugin.callbacks.mask2Rle = core.utils.mask2Rle;
     core.plugins.register(samPlugin);
 
     return {
@@ -332,6 +371,7 @@ const builder: ComponentBuilder = ({ core }) => {
             samPlugin.data.lowResMasks.clear();
             samPlugin.data.worker.terminate();
             samPlugin.data.lastClicks = [];
+            samPlugin.data.lastROIs = {};
             samPlugin.data.jobs = {};
             samPlugin.data.core = null;
             samPlugin.data.initialized = false;

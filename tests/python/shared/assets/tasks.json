@@ -1,8 +1,56 @@
 {
-  "count": 30,
+  "count": 31,
   "next": null,
   "previous": null,
   "results": [
+    {
+      "assignee": null,
+      "assignee_updated_date": null,
+      "bug_tracker": "",
+      "consensus_enabled": false,
+      "created_date": "2026-05-11T17:25:43.375000Z",
+      "data": 35,
+      "data_chunk_size": 6914,
+      "data_cloud_storage_id": null,
+      "data_compressed_chunk_type": "audio_mp3",
+      "data_original_chunk_type": "audio_mp3",
+      "dimension": "1d",
+      "guide_id": null,
+      "id": 36,
+      "jobs": {
+        "completed": 0,
+        "count": 2,
+        "url": "http://localhost:8080/api/jobs?task_id=36",
+        "validation": 0
+      },
+      "labels": {
+        "url": "http://localhost:8080/api/labels?task_id=36"
+      },
+      "media_type": "audio",
+      "mode": "interpolation",
+      "name": "task with audio and gt",
+      "organization": 2,
+      "organization_id": 2,
+      "overlap": 0,
+      "owner": {
+        "first_name": "User",
+        "id": 3,
+        "last_name": "Second",
+        "url": "http://localhost:8080/api/users/3",
+        "username": "user2"
+      },
+      "project_id": null,
+      "project_name": null,
+      "segment_size": 6914,
+      "size": 6914,
+      "source_storage": null,
+      "status": "annotation",
+      "subset": "",
+      "target_storage": null,
+      "updated_date": "2026-05-11T17:25:43.643000Z",
+      "url": "http://localhost:8080/api/tasks/36",
+      "validation_mode": "gt"
+    },
     {
       "assignee": null,
       "assignee_updated_date": null,
@@ -27,6 +75,7 @@
       "labels": {
         "url": "http://localhost:8080/api/labels?task_id=35"
       },
+      "media_type": "image",
       "mode": "annotation",
       "name": "task with tags",
       "organization": null,
@@ -40,6 +89,7 @@
         "username": "admin1"
       },
       "project_id": 18,
+      "project_name": "project with tags",
       "segment_size": 2,
       "size": 2,
       "source_storage": {
@@ -82,6 +132,7 @@
       "labels": {
         "url": "http://localhost:8080/api/labels?task_id=34"
       },
+      "media_type": "image",
       "mode": "interpolation",
       "name": "task with frame step and gt job",
       "organization": 2,
@@ -95,6 +146,7 @@
         "username": "user2"
       },
       "project_id": null,
+      "project_name": null,
       "segment_size": 10,
       "size": 20,
       "source_storage": {
@@ -137,6 +189,7 @@
       "labels": {
         "url": "http://localhost:8080/api/labels?task_id=33"
       },
+      "media_type": "image",
       "mode": "annotation",
       "name": "task with honeypots",
       "organization": 2,
@@ -150,6 +203,7 @@
         "username": "user2"
       },
       "project_id": 17,
+      "project_name": "project 4",
       "segment_size": 0,
       "size": 10,
       "source_storage": null,
@@ -184,6 +238,7 @@
       "labels": {
         "url": "http://localhost:8080/api/labels?task_id=32"
       },
+      "media_type": "image",
       "mode": "annotation",
       "name": "task with gt job",
       "organization": 2,
@@ -197,6 +252,7 @@
         "username": "user2"
       },
       "project_id": 17,
+      "project_name": "project 4",
       "segment_size": 4,
       "size": 4,
       "source_storage": null,
@@ -231,6 +287,7 @@
       "labels": {
         "url": "http://localhost:8080/api/labels?task_id=31"
       },
+      "media_type": "image",
       "mode": "annotation",
       "name": "sandbox task with consensus",
       "organization": null,
@@ -244,6 +301,7 @@
         "username": "user1"
       },
       "project_id": null,
+      "project_name": null,
       "segment_size": 3,
       "size": 3,
       "source_storage": {
@@ -286,6 +344,7 @@
       "labels": {
         "url": "http://localhost:8080/api/labels?task_id=30"
       },
+      "media_type": "image",
       "mode": "annotation",
       "name": "task with consensus and honeypots",
       "organization": 2,
@@ -299,6 +358,7 @@
         "username": "user2"
       },
       "project_id": null,
+      "project_name": null,
       "segment_size": 0,
       "size": 10,
       "source_storage": {
@@ -341,6 +401,7 @@
       "labels": {
         "url": "http://localhost:8080/api/labels?task_id=29"
       },
+      "media_type": "image",
       "mode": "annotation",
       "name": "task with honeypots",
       "organization": 2,
@@ -354,6 +415,7 @@
         "username": "admin1"
       },
       "project_id": null,
+      "project_name": null,
       "segment_size": 0,
       "size": 29,
       "source_storage": null,
@@ -388,6 +450,7 @@
       "labels": {
         "url": "http://localhost:8080/api/labels?task_id=28"
       },
+      "media_type": "image",
       "mode": "annotation",
       "name": "task 1",
       "organization": 2,
@@ -401,6 +464,7 @@
         "username": "user4"
       },
       "project_id": 10,
+      "project_name": "project 6",
       "segment_size": 1,
       "size": 1,
       "source_storage": {
@@ -449,6 +513,7 @@
       "labels": {
         "url": "http://localhost:8080/api/labels?task_id=27"
       },
+      "media_type": "image",
       "mode": "annotation",
       "name": "task assigned to maintainer",
       "organization": 2,
@@ -462,6 +527,7 @@
         "username": "user3"
       },
       "project_id": null,
+      "project_name": null,
       "segment_size": 1,
       "size": 1,
       "source_storage": {
@@ -510,6 +576,7 @@
       "labels": {
         "url": "http://localhost:8080/api/labels?task_id=26"
       },
+      "media_type": "image",
       "mode": "annotation",
       "name": "task assigned to owner",
       "organization": 2,
@@ -523,6 +590,7 @@
         "username": "user3"
       },
       "project_id": null,
+      "project_name": null,
       "segment_size": 1,
       "size": 1,
       "source_storage": {
@@ -565,6 +633,7 @@
       "labels": {
         "url": "http://localhost:8080/api/labels?task_id=25"
       },
+      "media_type": "image",
       "mode": "annotation",
       "name": "task-validation",
       "organization": null,
@@ -578,6 +647,7 @@
         "username": "admin1"
       },
       "project_id": 14,
+      "project_name": "project with subsets",
       "segment_size": 1,
       "size": 1,
       "source_storage": {
@@ -620,6 +690,7 @@
       "labels": {
         "url": "http://localhost:8080/api/labels?task_id=24"
       },
+      "media_type": "image",
       "mode": "annotation",
       "name": "task_train",
       "organization": null,
@@ -633,6 +704,7 @@
         "username": "admin1"
       },
       "project_id": 14,
+      "project_name": "project with subsets",
       "segment_size": 1,
       "size": 1,
       "source_storage": {
@@ -675,6 +747,7 @@
       "labels": {
         "url": "http://localhost:8080/api/labels?task_id=23"
       },
+      "media_type": "image",
       "mode": "annotation",
       "name": "task with several jobs and ground truth job",
       "organization": null,
@@ -688,6 +761,7 @@
         "username": "admin2"
       },
       "project_id": null,
+      "project_name": null,
       "segment_size": 5,
       "size": 11,
       "source_storage": null,
@@ -722,6 +796,7 @@
       "labels": {
         "url": "http://localhost:8080/api/labels?task_id=22"
       },
+      "media_type": "image",
       "mode": "annotation",
       "name": "task3_with_gt_job",
       "organization": 2,
@@ -735,6 +810,7 @@
         "username": "user2"
       },
       "project_id": null,
+      "project_name": null,
       "segment_size": 11,
       "size": 11,
       "source_storage": null,
@@ -769,6 +845,7 @@
       "labels": {
         "url": "http://localhost:8080/api/labels?task_id=21"
       },
+      "media_type": "image",
       "mode": "annotation",
       "name": "task with several jobs",
       "organization": null,
@@ -782,6 +859,7 @@
         "username": "admin1"
       },
       "project_id": null,
+      "project_name": null,
       "segment_size": 6,
       "size": 10,
       "source_storage": {
@@ -824,6 +902,7 @@
       "labels": {
         "url": "http://localhost:8080/api/labels?task_id=20"
       },
+      "media_type": "image",
       "mode": "annotation",
       "name": "task in project with attributes",
       "organization": null,
@@ -837,6 +916,7 @@
         "username": "admin1"
       },
       "project_id": 12,
+      "project_name": "project with attributes",
       "segment_size": 2,
       "size": 2,
       "source_storage": {
@@ -879,6 +959,7 @@
       "labels": {
         "url": "http://localhost:8080/api/labels?task_id=19"
       },
+      "media_type": "image",
       "mode": "annotation",
       "name": "task with attributes",
       "organization": null,
@@ -892,6 +973,7 @@
         "username": "admin1"
       },
       "project_id": null,
+      "project_name": null,
       "segment_size": 2,
       "size": 2,
       "source_storage": {
@@ -934,6 +1016,7 @@
       "labels": {
         "url": "http://localhost:8080/api/labels?task_id=18"
       },
+      "media_type": "image",
       "mode": "annotation",
       "name": "task in project7",
       "organization": 2,
@@ -947,6 +1030,7 @@
         "username": "admin1"
       },
       "project_id": 11,
+      "project_name": "project7",
       "segment_size": 2,
       "size": 2,
       "source_storage": {
@@ -995,6 +1079,7 @@
       "labels": {
         "url": "http://localhost:8080/api/labels?task_id=17"
       },
+      "media_type": "image",
       "mode": "annotation",
       "name": "task_3_org2",
       "organization": 2,
@@ -1008,6 +1093,7 @@
         "username": "admin1"
       },
       "project_id": null,
+      "project_name": null,
       "segment_size": 5,
       "size": 5,
       "source_storage": null,
@@ -1042,6 +1128,7 @@
       "labels": {
         "url": "http://localhost:8080/api/labels?task_id=15"
       },
+      "media_type": "image",
       "mode": "interpolation",
       "name": "task with video data",
       "organization": null,
@@ -1055,6 +1142,7 @@
         "username": "admin1"
       },
       "project_id": 8,
+      "project_name": "project with video data",
       "segment_size": 25,
       "size": 25,
       "source_storage": {
@@ -1097,6 +1185,7 @@
       "labels": {
         "url": "http://localhost:8080/api/labels?task_id=14"
       },
+      "media_type": "image",
       "mode": "annotation",
       "name": "task1 in project5",
       "organization": 2,
@@ -1110,6 +1199,7 @@
         "username": "admin1"
       },
       "project_id": 5,
+      "project_name": "project5",
       "segment_size": 8,
       "size": 8,
       "source_storage": {
@@ -1158,6 +1248,7 @@
       "labels": {
         "url": "http://localhost:8080/api/labels?task_id=13"
       },
+      "media_type": "image",
       "mode": "annotation",
       "name": "task1_in_project4",
       "organization": 2,
@@ -1171,6 +1262,7 @@
         "username": "admin1"
       },
       "project_id": 4,
+      "project_name": "project4",
       "segment_size": 5,
       "size": 5,
       "source_storage": null,
@@ -1187,7 +1279,8 @@
       "bug_tracker": "",
       "consensus_enabled": false,
       "created_date": "2022-03-14T13:24:05.852000Z",
-      "dimension": "2d",
+      "data": null,
+      "dimension": "",
       "guide_id": null,
       "id": 12,
       "jobs": {
@@ -1199,6 +1292,7 @@
       "labels": {
         "url": "http://localhost:8080/api/labels?task_id=12"
       },
+      "media_type": "",
       "mode": "",
       "name": "task_without_data",
       "organization": null,
@@ -1212,6 +1306,7 @@
         "username": "admin1"
       },
       "project_id": null,
+      "project_name": null,
       "segment_size": 0,
       "source_storage": null,
       "status": "annotation",
@@ -1251,6 +1346,7 @@
       "labels": {
         "url": "http://localhost:8080/api/labels?task_id=11"
       },
+      "media_type": "image",
       "mode": "annotation",
       "name": "task1_in_project2",
       "organization": 2,
@@ -1264,6 +1360,7 @@
         "username": "user7"
       },
       "project_id": 2,
+      "project_name": "project2",
       "segment_size": 11,
       "size": 11,
       "source_storage": {
@@ -1312,6 +1409,7 @@
       "labels": {
         "url": "http://localhost:8080/api/labels?task_id=9"
       },
+      "media_type": "image",
       "mode": "annotation",
       "name": "task1_in_project1",
       "organization": null,
@@ -1325,6 +1423,7 @@
         "username": "user7"
       },
       "project_id": 1,
+      "project_name": "project1",
       "segment_size": 5,
       "size": 20,
       "source_storage": null,
@@ -1365,6 +1464,7 @@
       "labels": {
         "url": "http://localhost:8080/api/labels?task_id=8"
       },
+      "media_type": "image",
       "mode": "annotation",
       "name": "task1",
       "organization": null,
@@ -1378,6 +1478,7 @@
         "username": "user1"
       },
       "project_id": null,
+      "project_name": null,
       "segment_size": 14,
       "size": 14,
       "source_storage": null,
@@ -1418,6 +1519,7 @@
       "labels": {
         "url": "http://localhost:8080/api/labels?task_id=7"
       },
+      "media_type": "image",
       "mode": "annotation",
       "name": "task_2_org2",
       "organization": 2,
@@ -1431,6 +1533,7 @@
         "username": "user8"
       },
       "project_id": null,
+      "project_name": null,
       "segment_size": 11,
       "size": 11,
       "source_storage": null,
@@ -1465,6 +1568,7 @@
       "labels": {
         "url": "http://localhost:8080/api/labels?task_id=6"
       },
+      "media_type": "point_cloud",
       "mode": "annotation",
       "name": "task3",
       "organization": null,
@@ -1478,6 +1582,7 @@
         "username": "user1"
       },
       "project_id": null,
+      "project_name": null,
       "segment_size": 1,
       "size": 1,
       "source_storage": null,
@@ -1518,6 +1623,7 @@
       "labels": {
         "url": "http://localhost:8080/api/labels?task_id=5"
       },
+      "media_type": "image",
       "mode": "interpolation",
       "name": "task2",
       "organization": null,
@@ -1531,6 +1637,7 @@
         "username": "user1"
       },
       "project_id": null,
+      "project_name": null,
       "segment_size": 25,
       "size": 25,
       "source_storage": null,
@@ -1571,6 +1678,7 @@
       "labels": {
         "url": "http://localhost:8080/api/labels?task_id=2"
       },
+      "media_type": "image",
       "mode": "annotation",
       "name": "task2",
       "organization": 1,
@@ -1584,6 +1692,7 @@
         "username": "user1"
       },
       "project_id": null,
+      "project_name": null,
       "segment_size": 23,
       "size": 23,
       "source_storage": null,

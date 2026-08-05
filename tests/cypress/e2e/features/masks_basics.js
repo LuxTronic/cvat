@@ -33,8 +33,8 @@ context('Manipulations with masks', { scrollBehavior: false }, () => {
         coordinates: [[50, 400], [800, 400], [800, 800], [50, 800]],
     }];
 
-    let taskID = null;
-    let jobID = null;
+    let taskId = null;
+    let jobId = null;
 
     before(() => {
         cy.visit('/auth/login');
@@ -52,10 +52,10 @@ context('Manipulations with masks', { scrollBehavior: false }, () => {
             use_cache: true,
             sorting_method: 'lexicographical',
         }).then((response) => {
-            taskID = response.taskID;
-            [jobID] = response.jobIDs;
+            taskId = response.taskId;
+            [jobId] = response.jobIds;
         }).then(() => {
-            cy.visit(`/tasks/${taskID}/jobs/${jobID}`);
+            cy.visit(`/tasks/${taskId}/jobs/${jobId}`);
             cy.get('.cvat-canvas-container').should('exist').and('be.visible');
         });
     });
@@ -65,7 +65,7 @@ context('Manipulations with masks', { scrollBehavior: false }, () => {
         cy.task('getAuthHeaders').then((authHeaders) => {
             cy.request({
                 method: 'DELETE',
-                url: `/api/tasks/${taskID}`,
+                url: `/api/tasks/${taskId}`,
                 headers: authHeaders,
             });
         });
@@ -76,6 +76,23 @@ context('Manipulations with masks', { scrollBehavior: false }, () => {
             cy.removeAnnotations();
             cy.goCheckFrameNumber(0);
         });
+
+        function readMaskSvgBox(selector) {
+            // Wait with retry: mask SVG gets real width/height only after async image.load().
+            // Assertions inside .then() are one-shot and flaky in CI.
+            return cy.get(selector)
+                .should('exist')
+                .and('be.visible')
+                .and(($el) => {
+                    expect(+$el.attr('width')).to.be.gt(1);
+                    expect(+$el.attr('height')).to.be.gt(1);
+                })
+                .then(($el) => {
+                    const width = +$el.attr('width');
+                    const height = +$el.attr('height');
+                    return { width, height, area: width * height };
+                });
+        }
 
         it('Drawing a couple of masks. Save job, reopen job, masks must exist', () => {
             cy.startMaskDrawing();
@@ -170,15 +187,17 @@ context('Manipulations with masks', { scrollBehavior: false }, () => {
             const mask2 = [{
                 method: 'brush',
                 coordinates: [[450, 250], [525, 325]],
+            }, {
+                method: 'underlying-pixels',
+                value: true,
             }];
 
             cy.startMaskDrawing();
             cy.drawMask(mask1);
             cy.get('.cvat-brush-tools-continue').click();
+            cy.hideTooltips();
 
             cy.drawMask(mask2);
-            cy.get('.cvat-brush-tools-underlying-pixels').click();
-            cy.get('.cvat-brush-tools-underlying-pixels').should('have.class', 'cvat-brush-tools-active-tool');
             cy.finishMaskDrawing();
 
             cy.get('#cvat-objects-sidebar-state-item-2').within(() => {
@@ -193,9 +212,97 @@ context('Manipulations with masks', { scrollBehavior: false }, () => {
                 cy.get('#cvat_canvas_shape_1').should('have.class', 'cvat_canvas_shape_activated');
             });
 
+            cy.hideTooltips();
             cy.startMaskDrawing();
-            cy.get('.cvat-brush-tools-underlying-pixels').click();
-            cy.get('.cvat-brush-tools-underlying-pixels').should('not.have.class', 'cvat-brush-tools-active-tool');
+            cy.drawMask([{ method: 'underlying-pixels', value: false }]);
+            cy.finishMaskDrawing();
+        });
+
+        it('Mask bbox shrinks after remove underlying pixels overlap', () => {
+            const mask1 = [{
+                method: 'brush',
+                coordinates: [[450, 250], [600, 400]],
+            }];
+            const mask2 = [{
+                method: 'brush',
+                coordinates: [[450, 250], [525, 325]],
+            }, {
+                method: 'underlying-pixels',
+                value: true,
+            }];
+
+            cy.startMaskDrawing();
+            cy.drawMask(mask1);
+            cy.get('.cvat-brush-tools-continue').click();
+            cy.hideTooltips();
+
+            readMaskSvgBox('#cvat_canvas_shape_1').then((before) => {
+                cy.drawMask(mask2);
+                cy.hideTooltips();
+                cy.finishMaskDrawing();
+
+                cy.get('#cvat_canvas_shape_1').should(($el) => {
+                    const afterW = +$el.attr('width');
+                    const afterH = +$el.attr('height');
+                    expect(afterW).to.be.gt(1);
+                    expect(afterH).to.be.gt(1);
+                    expect(afterW * afterH).to.be.lessThan(before.area);
+                    expect(afterW < before.width || afterH < before.height).to.be.true;
+                });
+            });
+
+            cy.hideTooltips();
+            cy.startMaskDrawing();
+            cy.drawMask([{ method: 'underlying-pixels', value: false }]);
+            cy.finishMaskDrawing();
+        });
+
+        it('Mask bbox is restored after undo remove underlying pixels overlap', () => {
+            const mask1 = [{
+                method: 'brush',
+                coordinates: [[450, 250], [600, 400]],
+            }];
+            const mask2 = [{
+                method: 'brush',
+                coordinates: [[450, 250], [525, 325]],
+            }, {
+                method: 'underlying-pixels',
+                value: true,
+            }];
+
+            cy.startMaskDrawing();
+            cy.drawMask(mask1);
+            cy.get('.cvat-brush-tools-continue').click();
+            cy.hideTooltips();
+
+            readMaskSvgBox('#cvat_canvas_shape_1').then((before) => {
+                cy.drawMask(mask2);
+                cy.hideTooltips();
+                cy.finishMaskDrawing();
+
+                cy.get('#cvat_canvas_shape_1').should(($el) => {
+                    const afterW = +$el.attr('width');
+                    const afterH = +$el.attr('height');
+                    expect(afterW).to.be.gt(1);
+                    expect(afterH).to.be.gt(1);
+                    expect(afterW * afterH).to.be.lessThan(before.area);
+                });
+
+                cy.hideTooltips();
+                cy.contains('.cvat-annotation-header-button', 'Undo').click();
+
+                cy.get('#cvat_canvas_shape_1').should(($el) => {
+                    const restoredW = +$el.attr('width');
+                    const restoredH = +$el.attr('height');
+                    expect(restoredW).to.be.gt(1);
+                    expect(restoredH).to.be.gt(1);
+                    expect(restoredW * restoredH).to.be.at.least(before.area - 1);
+                });
+            });
+
+            cy.hideTooltips();
+            cy.startMaskDrawing();
+            cy.drawMask([{ method: 'underlying-pixels', value: false }]);
             cy.finishMaskDrawing();
         });
 
@@ -367,8 +474,7 @@ context('Manipulations with masks', { scrollBehavior: false }, () => {
             }]];
 
             cy.startMaskDrawing();
-            cy.get('.cvat-brush-tools-underlying-pixels').click();
-            cy.get('.cvat-brush-tools-underlying-pixels').should('have.class', 'cvat-brush-tools-active-tool');
+            cy.drawMask([{ method: 'underlying-pixels', value: true }]);
             cy.finishMaskDrawing();
 
             for (const [index, mask] of masks.entries()) {
@@ -379,8 +485,14 @@ context('Manipulations with masks', { scrollBehavior: false }, () => {
                 cy.get(`#cvat_canvas_shape_${index + 1}`).should('exist').and('be.visible');
             }
 
-            // Fist mask is updated, second mask is removed after third mask is drawn
-            cy.contains('Some objects were deleted').should('exist').and('be.visible');
+            // First mask is updated, second mask is removed after third mask is drawn
+            cy.get('.cvat-empty-masks-notification').should('be.visible').within(() => {
+                cy.contains('Some objects were deleted').should('be.visible');
+                cy.contains(
+                    'As a result of removing the underlying pixels, some masks became empty and were subsequently deleted.',
+                ).should('be.visible');
+            });
+            cy.closeNotification('.cvat-empty-masks-notification');
             for (const id of [1, 3]) {
                 cy.get(`#cvat_canvas_shape_${id}`).should('exist').and('be.visible');
             }

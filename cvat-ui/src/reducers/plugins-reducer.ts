@@ -11,7 +11,6 @@ const defaultState: PluginsState = {
     initialized: false,
     list: {
         ANALYTICS: false,
-        MODELS: false,
     },
     current: {},
     callbacks: {
@@ -24,6 +23,9 @@ const defaultState: PluginsState = {
         },
     },
     overridableComponents: {
+        app: {
+            serverUnavailable: [],
+        },
         annotationPage: {
             header: {
                 // not used

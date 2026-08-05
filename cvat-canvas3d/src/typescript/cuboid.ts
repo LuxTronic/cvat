@@ -6,7 +6,8 @@
 import * as THREE from 'three';
 import { OrientationVisibility, ViewType } from './canvas3dModel';
 import constants from './consts';
-import controlPointTexture from './controlPointTexture';
+import getCircleTexture from './controlPointTexture';
+import { disposeObject3D, disposeObjectResources } from './utils';
 
 export interface Indexable {
     [key: string]: any;
@@ -163,6 +164,7 @@ export class CuboidModel {
     public setOrientationVisibility(orientationVisibility: OrientationVisibility): void {
         [ViewType.PERSPECTIVE, ViewType.TOP, ViewType.SIDE, ViewType.FRONT].forEach((view): void => {
             Object.entries(this.orientationArrows[view]).forEach(([axis, arrow]) => {
+                // eslint-disable-next-line no-param-reassign
                 arrow.visible = orientationVisibility[axis];
             });
         });
@@ -242,6 +244,25 @@ export class CuboidModel {
             ((this as Indexable)[view].material as THREE.MeshBasicMaterial).opacity = opacity / 100;
         });
     }
+
+    public dispose(): void {
+        disposeObject3D(this.perspective);
+        disposeObject3D(this.top);
+        disposeObject3D(this.side);
+        disposeObject3D(this.front);
+
+        this.perspective = null;
+        this.top = null;
+        this.side = null;
+        this.front = null;
+        this.wireframe = null;
+        this.orientationArrows = {
+            [ViewType.PERSPECTIVE]: null,
+            [ViewType.TOP]: null,
+            [ViewType.SIDE]: null,
+            [ViewType.FRONT]: null,
+        };
+    }
 }
 
 export function createCuboidEdges(instance: THREE.Mesh): THREE.LineSegments {
@@ -253,15 +274,18 @@ export function createCuboidEdges(instance: THREE.Mesh): THREE.LineSegments {
 }
 
 export function removeCuboidEdges(instance: THREE.Mesh): void {
-    const edges = instance.getObjectByName(constants.CUBOID_EDGE_NAME);
-    instance.remove(edges);
+    const edges = instance.getObjectByName(constants.CUBOID_EDGE_NAME) as THREE.LineSegments;
+    if (edges) {
+        instance.remove(edges);
+        disposeObjectResources(edges);
+    }
 }
 
 export function createResizeHelper(cuboid: CuboidModel, viewType: ViewType): void {
     const material = new THREE.SpriteMaterial({
         color: '#ff0000',
         opacity: 1,
-        map: controlPointTexture,
+        map: getCircleTexture,
     });
 
     const positions = cuboid.getResizeHelperPositions();
@@ -279,6 +303,10 @@ export function removeResizeHelper(instance: THREE.Mesh): void {
     instance.parent.children.filter((child: THREE.Object3D) => child.name.startsWith(constants.RESIZE_HELPER_NAME))
         .forEach((helper) => {
             instance.parent.remove(helper);
+            if ((helper as THREE.Sprite).material) {
+                const material = (helper as THREE.Sprite).material as THREE.SpriteMaterial;
+                material.dispose();
+            }
         });
 }
 
@@ -288,7 +316,7 @@ export function createRotationHelper(cuboid: CuboidModel, viewType: ViewType): v
         const rotationHelper = new THREE.Sprite(new THREE.SpriteMaterial({
             color: '#33b864',
             opacity: 1,
-            map: controlPointTexture,
+            map: getCircleTexture,
         }));
         rotationHelper.renderOrder = Number.MAX_SAFE_INTEGER;
         rotationHelper.name = constants.ROTATION_HELPER_NAME;
@@ -301,5 +329,9 @@ export function removeRotationHelper(instance: THREE.Mesh): void {
     const helper = instance.parent.getObjectByName(constants.ROTATION_HELPER_NAME);
     if (helper) {
         instance.parent.remove(helper);
+        if ((helper as THREE.Sprite).material) {
+            const material = (helper as THREE.Sprite).material as THREE.SpriteMaterial;
+            material.dispose();
+        }
     }
 }

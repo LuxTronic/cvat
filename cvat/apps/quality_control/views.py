@@ -3,11 +3,10 @@
 # SPDX-License-Identifier: MIT
 
 import textwrap
-from datetime import datetime
+from datetime import datetime, timezone
 
 from django.db.models import Q
 from django.http import HttpResponse
-from django.utils import timezone
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import (
     OpenApiParameter,
@@ -25,7 +24,7 @@ from cvat.apps.engine.mixins import PartialUpdateModelMixin
 from cvat.apps.engine.models import Job, Project, Task
 from cvat.apps.engine.rq import BaseRQMeta
 from cvat.apps.engine.types import ExtendedRequest
-from cvat.apps.engine.view_utils import deprecate_response, get_or_404
+from cvat.apps.engine.view_utils import deprecate_response
 from cvat.apps.quality_control import quality_reports as qc
 from cvat.apps.quality_control.export import (
     QualityReportExportFormat,
@@ -51,6 +50,7 @@ from cvat.apps.quality_control.serializers import (
     QualitySettingsSerializer,
 )
 from cvat.apps.redis_handler.serializers import RqIdSerializer
+from cvat.utils import django_database as db_utils
 
 
 @extend_schema(tags=["quality"])
@@ -73,24 +73,12 @@ from cvat.apps.redis_handler.serializers import RqIdSerializer
 class QualityConflictsViewSet(viewsets.GenericViewSet, mixins.ListModelMixin):
     queryset = AnnotationConflict.objects.prefetch_related("annotation_ids")
 
-    iam_organization_field = [
-        "report__job__segment__task__organization",
-        "report__task__organization",
-        "report__project__organization",
-    ]
+    iam_supports_organization_params = True
     iam_permission_class = AnnotationConflictPermission
 
     search_fields = []
-    filter_fields = list(search_fields) + [
-        "id",
-        "frame",
-        "type",
-        "job_id",
-        "task_id",
-        "project_id",
-        "severity",
-    ]
-    simple_filters = set(filter_fields) - {"id"}
+    simple_filters = ("frame", "type", "job_id", "task_id", "project_id", "severity")
+    filter_fields = (*simple_filters, "id")
     lookup_fields = {
         "job_id": "report__job__id",
         "task_id": "report__job__segment__task__id",  # task reports do not have own conflicts
@@ -107,7 +95,7 @@ class QualityConflictsViewSet(viewsets.GenericViewSet, mixins.ListModelMixin):
             if report_id := self.request.query_params.get("report_id", None):
                 # NOTE: This filter is too complex to be implemented by other means,
                 # it has a dependency on the report type
-                report = get_or_404(
+                report = db_utils.get_or_404(
                     QualityReport.objects.select_related(
                         "job__segment__task__organization",
                         "task__organization",
@@ -126,6 +114,8 @@ class QualityConflictsViewSet(viewsets.GenericViewSet, mixins.ListModelMixin):
                     queryset = queryset.filter(report__parents__parents=report)
                 else:
                     assert False
+
+                queryset = AnnotationConflictPermission.add_org_filter_proof(queryset)
             else:
                 perm = AnnotationConflictPermission.create_scope_list(self.request)
                 queryset = perm.filter(queryset)
@@ -197,24 +187,20 @@ class QualityReportViewSet(
 ):
     queryset = QualityReport.objects.prefetch_related("assignee")
 
-    iam_organization_field = [
-        "job__segment__task__organization",
-        "task__organization",
-        "project__organization",
-    ]
+    iam_supports_organization_params = True
     iam_permission_class = QualityReportPermission
 
     search_fields = []
-    filter_fields = list(search_fields) + [
+    simple_filters = ["job_id"]
+    filter_fields = (
+        *simple_filters,
         "id",
-        "job_id",
         "task_id",
         "project_id",
         "created_date",
         "gt_last_updated",
         "target_last_updated",
-    ]
-    simple_filters = ["job_id"]
+    )
     ordering_fields = list(filter_fields)
     ordering = "-id"
 
@@ -230,7 +216,8 @@ class QualityReportViewSet(
 
             # NOTE: the parent_id filter requires a different queryset
             if parent_id := self.request.query_params.get("parent_id", None):
-                parent_report = get_or_404(QualityReport, parent_id)
+                parent_report = db_utils.get_or_404(QualityReport, parent_id)
+                self.check_object_permissions(self.request, parent_report)
                 iam_context = get_iam_context(self.request, parent_report)
 
                 # For m2m relations this is actually "in"
@@ -239,13 +226,13 @@ class QualityReportViewSet(
                 )
 
             if job_id := self.request.query_params.get("job_id", None):
-                job = get_or_404(Job, job_id)
+                job = db_utils.get_or_404(Job, job_id)
                 self.check_object_permissions(self.request, job)
                 iam_context = get_iam_context(self.request, job)
 
             if task_id := self.request.query_params.get("task_id", None):
                 # NOTE: This filter is too complex to be implemented by other means
-                task = get_or_404(Task, task_id)
+                task = db_utils.get_or_404(Task, task_id)
                 self.check_object_permissions(self.request, task)
                 iam_context = get_iam_context(self.request, task)
 
@@ -253,7 +240,7 @@ class QualityReportViewSet(
 
             if project_id := self.request.query_params.get("project_id", None):
                 # NOTE: This filter is too complex to be implemented by other means
-                project = get_or_404(Project, project_id)
+                project = db_utils.get_or_404(Project, project_id)
                 self.check_object_permissions(self.request, project)
                 iam_context = get_iam_context(self.request, project)
 
@@ -341,9 +328,9 @@ class QualityReportViewSet(
             input_serializer.is_valid(raise_exception=True)
 
             if task_id := input_serializer.validated_data.get("task_id"):
-                target = get_or_404(Task, task_id)
+                target = db_utils.get_or_404(Task, task_id)
             elif project_id := input_serializer.validated_data.get("project_id"):
-                target = get_or_404(Project, project_id)
+                target = db_utils.get_or_404(Project, project_id)
             else:
                 assert False
 
@@ -518,12 +505,12 @@ class QualitySettingsViewSet(
 ):
     queryset = QualitySettings.objects
 
-    iam_organization_field = ["task__organization", "project__organization"]
+    iam_supports_organization_params = True
     iam_permission_class = QualitySettingPermission
 
     search_fields = []
-    filter_fields = ["id", "task_id", "project_id", "inherit", "created_date", "updated_date"]
-    simple_filters = ["task_id", "inherit"]
+    simple_filters = ("task_id", "inherit")
+    filter_fields = (*simple_filters, "id", "project_id", "created_date", "updated_date")
     ordering_fields = list(filter_fields)
     ordering = "id"
 
@@ -537,12 +524,12 @@ class QualitySettingsViewSet(
 
             if task_id := self.request.query_params.get("task_id", None):
                 # This filter requires extra checks
-                task = get_or_404(Task, task_id)
+                task = db_utils.get_or_404(Task, task_id)
                 self.check_object_permissions(self.request, task)
                 iam_context = get_iam_context(self.request, task)
             elif project_id := self.request.query_params.get("project_id", None):
                 # This filter requires extra checks
-                project = get_or_404(Project, project_id)
+                project = db_utils.get_or_404(Project, project_id)
                 self.check_object_permissions(self.request, project)
                 iam_context = get_iam_context(self.request, project)
 

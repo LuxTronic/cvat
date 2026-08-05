@@ -10,7 +10,7 @@ import json
 import os
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterator, Sequence
-from concurrent.futures import FIRST_EXCEPTION, Future, ThreadPoolExecutor, wait
+from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime
 from enum import Enum
 from io import BytesIO
@@ -24,7 +24,12 @@ from azure.storage.blob import BlobServiceClient, ContainerClient
 from azure.storage.blob._list_blobs_helper import BlobPrefix
 from boto3.s3.transfer import TransferConfig
 from botocore.client import Config
-from botocore.exceptions import ClientError, EndpointConnectionError
+from botocore.exceptions import (
+    ClientError,
+    ConnectTimeoutError,
+    EndpointConnectionError,
+    ReadTimeoutError,
+)
 from botocore.handlers import disable_signing
 from django.conf import settings
 from google.api_core.exceptions import RetryError
@@ -43,7 +48,7 @@ from cvat.apps.engine.models import (
     DimensionType,
 )
 from cvat.apps.engine.rq import ExportRQMeta
-from cvat.apps.engine.utils import get_cpu_number
+from cvat.apps.engine.utils import get_cpu_number, take_by
 from cvat.utils.http import PROXIES_FOR_UNTRUSTED_URLS
 from utils.dataset_manifest.utils import (
     InvalidPcdError,
@@ -148,8 +153,9 @@ def validate_file_status(func):
 
 
 class AbstractCloudStorage(ABC):
-    def __init__(self, prefix: str | None = None) -> None:
+    def __init__(self, *, prefix: str | None = None, is_trusted: bool = False) -> None:
         self.prefix = prefix
+        self.proxies = None if is_trusted else PROXIES_FOR_UNTRUSTED_URLS
 
     @property
     @abstractmethod
@@ -241,6 +247,12 @@ class AbstractCloudStorage(ABC):
                 top_job = queue.get()
                 yield top_job.result()
 
+    def _in_parallel(self, fn: Callable[[T], object], args: Sequence[T]) -> None:
+        threads_number = get_max_threads_number(len(args))
+
+        with ThreadPoolExecutor(max_workers=threads_number) as executor:
+            list(executor.map(fn, args))
+
     def bulk_download_to_dir(
         self,
         files: Sequence[PurePath | tuple[str, PurePath]],
@@ -251,24 +263,26 @@ class AbstractCloudStorage(ABC):
         :param upload_dir: the output directory
         """
 
-        threads_number = get_max_threads_number(len(files))
+        def download_one(f: PurePath | tuple[str, PurePath]) -> None:
+            if isinstance(f, tuple):
+                key, output_path = f
+            else:
+                key = f.as_posix()
+                output_path = f
 
-        with ThreadPoolExecutor(max_workers=threads_number) as executor:
-            futures = []
-            for f in files:
-                if isinstance(f, tuple):
-                    key, output_path = f
-                else:
-                    key = f.as_posix()
-                    output_path = f
+            self.download_file(key, upload_dir / output_path)
 
-                output_path = upload_dir / output_path
-                futures.append(executor.submit(self.download_file, key, output_path))
+        self._in_parallel(download_one, files)
 
-            done, _ = wait(futures, return_when=FIRST_EXCEPTION)
-            for future in done:
-                if ex := future.exception():
-                    raise ex
+    def bulk_upload_from_dir(
+        self,
+        files: Sequence[PurePath],
+        upload_dir: Path,
+    ):
+        def upload_one(f: PurePath):
+            self.upload_file(upload_dir / f, f.as_posix())
+
+        self._in_parallel(upload_one, files)
 
     @abstractmethod
     def upload_fileobj(self, file_obj: BinaryIO, key: str, /) -> None:
@@ -276,6 +290,10 @@ class AbstractCloudStorage(ABC):
 
     @abstractmethod
     def upload_file(self, file_path: Path, key: str | None = None, /) -> None:
+        pass
+
+    @abstractmethod
+    def bulk_delete(self, files: Sequence[str]) -> None:
         pass
 
     @abstractmethod
@@ -354,7 +372,7 @@ class AbstractCloudStorage(ABC):
         prefix: str = "",
         *,
         _use_flat_listing: bool = False,
-    ) -> list[str]:
+    ) -> list[dict]:
         all_files = []
         next_token = None
         while True:
@@ -435,11 +453,23 @@ class HeaderFirstDownloader(ABC):
             buff.write(chunk)
 
             partial_contents = buff.getvalue()
+            if len(partial_contents) < header_size:
+                # This means that the entire file is smaller than the current header_size.
+                # It doesn't matter whether the header can be parsed,
+                # since there's no more data to download anyway.
+                return MemNamedOpenable(partial_contents, key)
+
             if self.try_parse_header(key, partial_contents):
                 return MemNamedOpenable(partial_contents, key)
 
             if i + 1 < len(headers_to_try):
                 self.log_header_miss(key=key, header_size=header_size)
+
+            # If the full size is exactly equal to header_size,
+            # the next download_range_of_bytes call will have start_byte equal to the file size,
+            # and the request will fail (since an HTTP range can't be empty).
+            # To prevent this, force the range to be non-empty by redownloading the last byte.
+            buff.seek(-1, os.SEEK_CUR)
 
         full_contents = self.client.download_fileobj(key)
         self.log_header_miss(key=key, header_size=header_size, full_contents=full_contents)
@@ -525,6 +555,7 @@ def get_cloud_storage_instance(
     resource: str,
     credentials: Credentials,
     specific_attributes: dict[str, Any],
+    is_trusted: bool = False,
 ):
     instance = None
     if cloud_provider == CloudProviderChoice.AMAZON_S3:
@@ -536,6 +567,7 @@ def get_cloud_storage_instance(
             region=specific_attributes.get("region"),
             endpoint_url=specific_attributes.get("endpoint_url"),
             prefix=specific_attributes.get("prefix"),
+            is_trusted=is_trusted,
         )
     elif cloud_provider == CloudProviderChoice.AZURE_BLOB_STORAGE:
         instance = AzureBlobCloudStorage(
@@ -544,6 +576,7 @@ def get_cloud_storage_instance(
             sas_token=credentials.session_token,
             connection_string=credentials.connection_string,
             prefix=specific_attributes.get("prefix"),
+            is_trusted=is_trusted,
         )
     elif cloud_provider == CloudProviderChoice.GOOGLE_CLOUD_STORAGE:
         instance = GcsCloudStorage(
@@ -578,8 +611,9 @@ class S3CloudStorage(AbstractCloudStorage):
         session_token: str | None = None,
         endpoint_url: str | None = None,
         prefix: str | None = None,
+        is_trusted: bool = False,
     ):
-        super().__init__(prefix=prefix)
+        super().__init__(prefix=prefix, is_trusted=is_trusted)
         if sum(1 for credential in (access_key_id, secret_key, session_token) if credential) == 1:
             raise Exception("Insufficient data for authentication")
 
@@ -597,11 +631,16 @@ class S3CloudStorage(AbstractCloudStorage):
                 kwargs[key] = arg_v
 
         session = boto3.Session(**kwargs)
+        # Status checks are part of the control plane, not the data-transfer path, so
+        # Bucket status probes should fail fast when the endpoint is unreachable or
+        # misconfigured. Keep a dedicated low-timeout client for head_bucket, while
+        # the regular resource/client retain their standard retry behavior for normal
+        # storage operations.
         self._s3 = session.resource(
             "s3",
             endpoint_url=endpoint_url,
             config=Config(
-                proxies=PROXIES_FOR_UNTRUSTED_URLS or {},
+                proxies=self.proxies or {},
                 max_pool_connections=(
                     # AWS can throttle the requests if there are too many of them,
                     # the SDK handles it with the retry policy:
@@ -611,10 +650,21 @@ class S3CloudStorage(AbstractCloudStorage):
                 ),
             ),
         )
+        self._status_client = session.client(
+            "s3",
+            endpoint_url=endpoint_url,
+            config=Config(
+                proxies=self.proxies or {},
+                connect_timeout=2,
+                read_timeout=5,
+                retries={"total_max_attempts": 1, "mode": "standard"},
+            ),
+        )
 
         # anonymous access
         if not any([access_key_id, secret_key, session_token]):
             self._s3.meta.client.meta.events.register("choose-signer.s3.*", disable_signing)
+            self._status_client.meta.events.register("choose-signer.s3.*", disable_signing)
 
         self._client = self._s3.meta.client
         self._bucket = self._s3.Bucket(bucket)
@@ -629,9 +679,12 @@ class S3CloudStorage(AbstractCloudStorage):
         return self._bucket.name
 
     def _head(self):
-        return self._client.head_bucket(Bucket=self.name)
+        # Bucket status checks use the dedicated fast-fail client.
+        return self._status_client.head_bucket(Bucket=self.name)
 
     def _head_file(self, key: str, /):
+        # File metadata reads stay on the regular client so they retain standard retry
+        # behavior on slower S3-compatible backends.
         return self._client.head_object(Bucket=self.name, Key=key)
 
     def get_status(self):
@@ -646,7 +699,9 @@ class S3CloudStorage(AbstractCloudStorage):
                 return Status.FORBIDDEN
             else:
                 return Status.NOT_FOUND
-        except EndpointConnectionError:
+        # Handle transport-level reachability failures separately from ClientError-
+        # based 403/404 responses.
+        except (ConnectTimeoutError, EndpointConnectionError, ReadTimeoutError):
             slogger.glob.warning(
                 f"CloudStorage S3 {self._client.meta.endpoint_url}, {self.name} not available",
                 exc_info=True,
@@ -663,6 +718,14 @@ class S3CloudStorage(AbstractCloudStorage):
                 return Status.FORBIDDEN
             else:
                 return Status.NOT_FOUND
+        # Handle transport-level reachability failures separately from ClientError-
+        # based 403/404 responses.
+        except (ConnectTimeoutError, EndpointConnectionError, ReadTimeoutError):
+            slogger.glob.warning(
+                f"CloudStorage S3 {self._client.meta.endpoint_url}, {self.name}/{key} not available",
+                exc_info=True,
+            )
+            return Status.NOT_FOUND
 
     @validate_file_status
     @validate_bucket_status
@@ -743,13 +806,12 @@ class S3CloudStorage(AbstractCloudStorage):
                     slogger.glob.error(f"{str(ex)}. Key: {key}, bucket: {self.name}")
             raise
 
-    def delete_file(self, file_name: str, /):
-        try:
-            self._client.delete_object(Bucket=self.name, Key=file_name)
-        except Exception as ex:
-            msg = str(ex)
-            slogger.glob.info(msg)
-            raise
+    def bulk_delete(self, files: Sequence[str]) -> None:
+        def delete_batch(batch: Sequence[str]):
+            delete_request = {"Objects": [{"Key": f} for f in batch], "Quiet": True}
+            self._client.delete_objects(Bucket=self.name, Delete=delete_request)
+
+        self._in_parallel(delete_batch, list(take_by(files, 1000)))
 
     @property
     def supported_actions(self):
@@ -792,22 +854,23 @@ class AzureBlobCloudStorage(AbstractCloudStorage):
         sas_token: str | None = None,
         connection_string: str | None = None,
         prefix: str | None = None,
+        is_trusted: bool = False,
     ):
-        super().__init__(prefix=prefix)
+        super().__init__(prefix=prefix, is_trusted=is_trusted)
         self._account_name = account_name
         if connection_string:
             self._blob_service_client = BlobServiceClient.from_connection_string(
-                connection_string, proxies=PROXIES_FOR_UNTRUSTED_URLS
+                connection_string, proxies=self.proxies
             )
         elif sas_token:
             self._blob_service_client = BlobServiceClient(
                 account_url=self.account_url,
                 credential=sas_token,
-                proxies=PROXIES_FOR_UNTRUSTED_URLS,
+                proxies=self.proxies,
             )
         else:
             self._blob_service_client = BlobServiceClient(
-                account_url=self.account_url, proxies=PROXIES_FOR_UNTRUSTED_URLS
+                account_url=self.account_url, proxies=self.proxies
             )
         self._client = self._blob_service_client.get_container_client(container)
 
@@ -870,6 +933,12 @@ class AzureBlobCloudStorage(AbstractCloudStorage):
         with open(file_path, "rb") as f:
             self.upload_fileobj(f, key or file_path.name)
 
+    def bulk_delete(self, files: Sequence[str]) -> None:
+        def delete_batch(batch: Sequence[str]) -> None:
+            self._client.delete_blobs(*batch)
+
+        self._in_parallel(delete_batch, list(take_by(files, 256)))
+
     def _list_raw_content_on_one_page(
         self,
         prefix: str = "",
@@ -908,7 +977,9 @@ class AzureBlobCloudStorage(AbstractCloudStorage):
         storage_stream_downloader.readinto(stream)
 
     def _download_range_of_bytes(self, key: str, /, *, stop_byte: int, start_byte: int) -> bytes:
-        return self._client.download_blob(blob=key, offset=start_byte, length=stop_byte).readall()
+        return self._client.download_blob(
+            blob=key, offset=start_byte, length=stop_byte - start_byte + 1
+        ).readall()
 
     @property
     def supported_actions(self):
@@ -1032,6 +1103,14 @@ class GcsCloudStorage(AbstractCloudStorage):
     def upload_file(self, file_path: Path, key: str | None = None, /):
         self.bucket.blob(key or file_path.name).upload_from_filename(os.fspath(file_path))
 
+    def bulk_delete(self, files: Sequence[str]) -> None:
+        def delete_batch(batch: Sequence[str]):
+            with self._client.batch():
+                for key in batch:
+                    self.bucket.delete_blob(key)
+
+        self._in_parallel(delete_batch, list(take_by(files, 100)))
+
     @validate_file_status
     @validate_bucket_status
     def get_file_last_modified(self, key: str, /):
@@ -1042,6 +1121,73 @@ class GcsCloudStorage(AbstractCloudStorage):
     @property
     def supported_actions(self):
         pass
+
+
+class SubdirectoryCloudStorage(AbstractCloudStorage):
+    def __init__(self, underlying: AbstractCloudStorage, subdirectory: str) -> None:
+        super().__init__()
+
+        self.underlying = underlying
+        self.subdirectory = subdirectory
+        if not self.subdirectory.endswith("/"):
+            self.subdirectory += "/"
+
+    def _map_key(self, key: str) -> str:
+        return self.subdirectory + key
+
+    def _unmap_key(self, key: str) -> str:
+        assert key.startswith(self.subdirectory)
+        return key[len(self.subdirectory) :]
+
+    @property
+    def name(self) -> str:
+        return self.underlying.name + "/" + self.subdirectory
+
+    def get_status(self) -> Status:
+        return self.underlying.get_status()
+
+    def get_file_status(self, key: str, /) -> Status:
+        return self.underlying.get_file_status(self._map_key(key))
+
+    def get_file_last_modified(self, key: str, /) -> datetime:
+        return self.underlying.get_file_last_modified(self._map_key(key))
+
+    def _download_fileobj_to_stream(self, key: str, stream: BinaryIO, /) -> None:
+        return self.underlying._download_fileobj_to_stream(self._map_key(key), stream)
+
+    def _download_range_of_bytes(self, key: str, /, *, stop_byte: int, start_byte: int) -> bytes:
+        return self.underlying._download_range_of_bytes(
+            self._map_key(key), start_byte=start_byte, stop_byte=stop_byte
+        )
+
+    def upload_fileobj(self, file_obj: BinaryIO, key: str, /) -> None:
+        return self.underlying.upload_fileobj(file_obj, self._map_key(key))
+
+    def upload_file(self, file_path: Path, key: str | None = None, /) -> None:
+        assert key is not None
+        return self.underlying.upload_file(file_path, self._map_key(key))
+
+    def bulk_delete(self, files: Sequence[str]) -> None:
+        self.underlying.bulk_delete(list(map(self._map_key, files)))
+
+    def _list_raw_content_on_one_page(
+        self,
+        prefix: str = "",
+        *,
+        next_token: str | None = None,
+        page_size: int = settings.BUCKET_CONTENT_MAX_PAGE_SIZE,
+    ) -> dict:
+        result = self.underlying._list_raw_content_on_one_page(
+            self._map_key(prefix), next_token=next_token, page_size=page_size
+        )
+
+        for key in ("files", "directories"):
+            result[key] = list(map(self._unmap_key, result[key]))
+
+        return result
+
+    def supported_actions(self):
+        return self.underlying.supported_actions
 
 
 class Credentials:
@@ -1132,7 +1278,9 @@ class Credentials:
         ]
 
 
-def db_storage_to_storage_instance(db_storage: CloudStorage) -> AbstractCloudStorage:
+def db_storage_to_storage_instance(
+    db_storage: CloudStorage, *, is_trusted: bool = False
+) -> AbstractCloudStorage:
     credentials = Credentials()
     credentials.convert_from_db(
         {
@@ -1145,7 +1293,11 @@ def db_storage_to_storage_instance(db_storage: CloudStorage) -> AbstractCloudSto
         "credentials": credentials,
         "specific_attributes": db_storage.get_specific_attributes(),
     }
-    return get_cloud_storage_instance(cloud_provider=db_storage.provider_type, **details)
+    return get_cloud_storage_instance(
+        cloud_provider=db_storage.provider_type,
+        is_trusted=is_trusted,
+        **details,
+    )
 
 
 P = ParamSpec("P")

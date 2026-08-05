@@ -87,6 +87,7 @@ import InvitationWatcher from './invitation-watcher/invitation-watcher';
 import SelectOrganizationModal from './select-organization-modal/select-organization-modal';
 import BulkProgress from './bulk-progress';
 import ProfilePageComponent from './profile-page/profile-page';
+import ServerUnavailableComponent from './server-unavailable/server-unavailable';
 
 interface CVATAppProps {
     loadFormats: () => void;
@@ -118,7 +119,6 @@ interface CVATAppProps {
     userAgreementsInitialized: boolean;
     notifications: NotificationsState;
     user: any;
-    isModelPluginActive: boolean;
     pluginComponents: PluginsState['components'];
     invitationsFetching: boolean;
     invitationsInitialized: boolean;
@@ -133,6 +133,7 @@ interface CVATAppProps {
 interface CVATAppState {
     healthIinitialized: boolean;
     backendIsHealthy: boolean;
+    healthCheckError: string | null;
 }
 class CVATApplication extends React.PureComponent<CVATAppProps & RouteComponentProps, CVATAppState> {
     constructor(props: CVATAppProps & RouteComponentProps) {
@@ -141,6 +142,7 @@ class CVATApplication extends React.PureComponent<CVATAppProps & RouteComponentP
         this.state = {
             healthIinitialized: false,
             backendIsHealthy: false,
+            healthCheckError: null,
         };
     }
 
@@ -149,7 +151,7 @@ class CVATApplication extends React.PureComponent<CVATAppProps & RouteComponentP
         const { history, onChangeLocation } = this.props;
         const {
             HEALTH_CHECK_RETRIES, HEALTH_CHECK_PERIOD, HEALTH_CHECK_REQUEST_TIMEOUT,
-            SERVER_UNAVAILABLE_COMPONENT, RESET_NOTIFICATIONS_PATHS,
+            RESET_NOTIFICATIONS_PATHS,
         } = appConfig;
 
         // Logger configuration
@@ -220,22 +222,16 @@ class CVATApplication extends React.PureComponent<CVATAppProps & RouteComponentP
             this.setState({
                 healthIinitialized: true,
                 backendIsHealthy: true,
+                healthCheckError: null,
             });
         })
-            .catch(() => {
+            .catch((error: unknown) => {
+                const healthCheckError = error instanceof Error ? error.message : 'The CVAT server is not reachable.';
+
                 this.setState({
                     healthIinitialized: true,
                     backendIsHealthy: false,
-                });
-
-                Modal.error({
-                    title: 'Cannot connect to the server',
-                    className: 'cvat-modal-cannot-connect-server',
-                    closable: false,
-                    content:
-    <Text>
-        {SERVER_UNAVAILABLE_COMPONENT}
-    </Text>,
+                    healthCheckError,
                 });
             });
 
@@ -309,7 +305,6 @@ class CVATApplication extends React.PureComponent<CVATAppProps & RouteComponentP
             user,
             userAgreementsFetching,
             userAgreementsInitialized,
-            isModelPluginActive,
             invitationsInitialized,
             invitationsFetching,
             initInvitations,
@@ -373,7 +368,7 @@ class CVATApplication extends React.PureComponent<CVATAppProps & RouteComponentP
             initRequests();
         }
 
-        if (isModelPluginActive && !modelsInitialized && !modelsFetching) {
+        if (!modelsInitialized && !modelsFetching) {
             initModels();
         }
 
@@ -487,23 +482,21 @@ class CVATApplication extends React.PureComponent<CVATAppProps & RouteComponentP
             pluginComponents,
             user,
             location,
-            isModelPluginActive,
             isPasswordResetEnabled,
             isRegistrationEnabled,
         } = this.props;
 
-        const { healthIinitialized, backendIsHealthy } = this.state;
+        const { healthIinitialized, backendIsHealthy, healthCheckError } = this.state;
 
         const notRegisteredUserInitialized = (userInitialized && (user == null || !user.isVerified));
-        let readyForRender = userAgreementsInitialized && serverAPISchemaInitialized;
+        let readyForRender = userAgreementsInitialized && serverAPISchemaInitialized && aboutInitialized;
         readyForRender = readyForRender && (notRegisteredUserInitialized ||
             (
                 userInitialized &&
                 formatsInitialized &&
                 pluginsInitialized &&
-                aboutInitialized &&
                 organizationInitialized &&
-                (!isModelPluginActive || modelsInitialized)
+                modelsInitialized
             )
         );
 
@@ -567,15 +560,13 @@ class CVATApplication extends React.PureComponent<CVATAppProps & RouteComponentP
                                         <Route exact path='/requests' component={RequestsPage} />
                                         <Route exact path='/profile' component={ProfilePageComponent} />
                                         { routesToRender }
-                                        {isModelPluginActive && (
-                                            <Route
-                                                path='/models'
-                                            >
-                                                <Switch>
-                                                    <Route exact path='/models' component={ModelsPageComponent} />
-                                                </Switch>
-                                            </Route>
-                                        )}
+                                        <Route
+                                            path='/models'
+                                        >
+                                            <Switch>
+                                                <Route exact path='/models' component={ModelsPageComponent} />
+                                            </Switch>
+                                        </Route>
                                         <Redirect
                                             push
                                             to={{
@@ -637,9 +628,12 @@ class CVATApplication extends React.PureComponent<CVATAppProps & RouteComponentP
 
         if (healthIinitialized && !backendIsHealthy) {
             return (
-                <Space align='center' direction='vertical' className='cvat-spinner'>
+                <Space align='center' direction='vertical' className='cvat-spinner cvat-server-unavailable'>
                     <DisconnectOutlined className='cvat-disconnected' />
-                    Cannot connect to the server.
+                    <Text className='cvat-server-unavailable-title' strong>
+                        Cannot connect to the server
+                    </Text>
+                    <ServerUnavailableComponent details={healthCheckError} />
                 </Space>
             );
         }
