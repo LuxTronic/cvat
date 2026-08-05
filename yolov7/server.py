@@ -279,7 +279,7 @@ async def infer(
                 pred = model(img_tensor)[0]
                 pred = non_max_suppression(
                     pred,
-                    conf_thres=0.02,
+                    conf_thres=0.20,
                     iou_thres=0.10,
                 )
 
@@ -340,7 +340,7 @@ def train_task(payload: dict):
         "--weights", "/yolov7/weights/yolov7.pt",
         "--img-size", "512",
         "--batch-size", "8",
-        "--epochs", "200",
+        "--epochs", "100",
         "--data", str(data_yaml),
         "--freeze", "10",
         "--rect",
