@@ -19,6 +19,7 @@ from types import SimpleNamespace
 from typing import Any, cast
 
 import django_rq
+import requests
 from attr.converters import to_bool
 from django.conf import settings
 from django.contrib.auth.models import User
@@ -2548,6 +2549,308 @@ class JobViewSet(
                 except (AttributeError, IntegrityError) as e:
                     return Response(data=str(e), status=status.HTTP_400_BAD_REQUEST)
                 return Response(data)
+
+    def _remote_lux_yolov7_models(self, db_job: Job) -> list[dict[str, Any]]:
+        url = str(settings.LUX_MODEL_CATALOG.get("URL") or "").strip()
+        if not url:
+            return []
+
+        task_label_names = [
+            str(label.name or "").strip()
+            for label in db_job.get_labels()
+            if str(label.name or "").strip()
+        ]
+        params: list[tuple[str, str | int]] = [
+            ("solution_id", "final-pallet-inspection"),
+            ("task_type", "object_detection"),
+            ("task_id", db_job.segment.task_id),
+            ("job_id", db_job.id),
+        ]
+        task_name = str(db_job.segment.task.name or "").strip()
+        if task_name:
+            params.append(("task_name", task_name))
+        for label in task_label_names:
+            params.append(("labels", label))
+
+        timeout = int(settings.LUX_MODEL_CATALOG.get("TIMEOUT") or 8)
+        try:
+            response = requests.get(url, params=params, timeout=timeout)
+            response.raise_for_status()
+            payload = response.json()
+        except Exception:
+            return []
+
+        models = payload.get("models", []) if isinstance(payload, dict) else []
+        return [model for model in models if isinstance(model, dict)]
+
+    def _available_lux_yolov7_models(self, db_job: Job) -> list[dict[str, Any]]:
+        task_label_names = {
+            str(label.name or "").strip()
+            for label in db_job.get_labels()
+            if str(label.name or "").strip()
+        }
+        merged: list[dict[str, Any]] = []
+        seen_ids: set[str] = set()
+        for model in [*self._remote_lux_yolov7_models(db_job), *settings.LUX_YOLOV7_MODELS]:
+            model_id = str(model.get("id", "")).strip()
+            if not model_id or model_id in seen_ids:
+                continue
+            labels = [str(label).strip() for label in model.get("labels", []) if str(label).strip()]
+            if labels and not set(labels).issubset(task_label_names):
+                continue
+            seen_ids.add(model_id)
+            merged.append(
+                {
+                    "id": model_id,
+                    "name": model.get("name", model_id),
+                    "model_slot": model.get("model_slot", ""),
+                    "legacy_project_key": model.get("legacy_project_key", ""),
+                    "dataset_family_id": model.get("dataset_family_id", ""),
+                    "family_key": model.get("family_key", ""),
+                    "model_uri": model.get("model_uri", ""),
+                    "labels": labels,
+                    "source_kind": model.get("source_kind", "legacy"),
+                    "registry_status": model.get("registry_status", ""),
+                    "slot_status": model.get("slot_status", ""),
+                    "slot_display_name": model.get("slot_display_name", ""),
+                    "model_version_id": model.get("model_version_id", ""),
+                    "architecture": model.get("architecture", ""),
+                }
+            )
+        return merged
+
+    @extend_schema(
+        methods=["POST"],
+        summary="Generate inference using YOLOv7 service",
+        parameters=[
+            OpenApiParameter(
+                "frame",
+                location=OpenApiParameter.QUERY,
+                type=OpenApiTypes.INT,
+                required=True,
+                description="Frame number to process",
+            ),
+            OpenApiParameter(
+                "model_id",
+                location=OpenApiParameter.QUERY,
+                type=OpenApiTypes.STR,
+                required=False,
+                description="Auto-annotation model to use; defaults to the task's active model",
+            ),
+        ],
+        responses={"200": OpenApiResponse(description="Inference finished and annotations saved")},
+    )
+    @action(detail=True, methods=["POST"], url_path="auto-annotate")
+    def auto_annotate(self, request: ExtendedRequest, pk: int):
+        from cvat.apps.engine.background import run_yolov7_inference_frame
+
+        db_job = self.get_object()
+
+        frame = request.query_params.get("frame")
+        if frame is None:
+            raise ValidationError("frame is required")
+
+        frame = int(frame)
+
+        task_id = db_job.segment.task.data.id
+        model_id = request.query_params.get("model_id", "")
+        if not model_id and isinstance(request.data, dict):
+            model_id = request.data.get("model_id", "")
+        model_uri = ""
+        selected_model = None
+        if model_id:
+            for candidate in self._available_lux_yolov7_models(db_job):
+                if str(candidate.get("id", "")) == str(model_id):
+                    selected_model = candidate
+                    model_uri = str(candidate.get("model_uri", ""))
+                    break
+
+            if selected_model is None:
+                raise ValidationError(f"Unknown YOLOv7 auto-annotation model: {model_id}")
+
+        # Run inference synchronously
+        run_yolov7_inference_frame(
+            job_id=db_job.id,
+            task_id=task_id,
+            frame=frame,
+            model_id=model_id or "",
+            model_uri=model_uri,
+        )
+
+        return Response(status=200)
+
+    @extend_schema(
+        methods=["GET"],
+        summary="List YOLOv7 auto-annotation models available for this job",
+        responses={"200": OpenApiResponse(description="Available YOLOv7 models")},
+    )
+    @action(detail=True, methods=["GET"], url_path="auto-annotate-models")
+    def auto_annotate_models(self, request: ExtendedRequest, pk: int):
+        db_job = self.get_object()
+        task_label_names = sorted(
+            {
+                str(label.name or "").strip()
+                for label in db_job.get_labels()
+                if str(label.name or "").strip()
+            }
+        )
+        models = []
+
+        for model in self._available_lux_yolov7_models(db_job):
+            models.append(
+                {
+                    "id": model.get("id", ""),
+                    "name": model.get("name", model.get("id", "")),
+                    "model_slot": model.get("model_slot", ""),
+                    "legacy_project_key": model.get("legacy_project_key", ""),
+                    "dataset_family_id": model.get("dataset_family_id", ""),
+                    "family_key": model.get("family_key", ""),
+                    "model_uri": model.get("model_uri", ""),
+                    "labels": model.get("labels", []),
+                    "source_kind": model.get("source_kind", "legacy"),
+                    "registry_status": model.get("registry_status", ""),
+                    "slot_status": model.get("slot_status", ""),
+                    "slot_display_name": model.get("slot_display_name", ""),
+                    "model_version_id": model.get("model_version_id", ""),
+                    "architecture": model.get("architecture", ""),
+                }
+            )
+
+        return Response(
+            {
+                "models": models,
+                "task_labels": sorted(task_label_names),
+            }
+        )
+
+    @extend_schema(
+        methods=["POST"],
+        summary="Generate classification tags using YOLOv8-CLS service",
+        parameters=[
+            OpenApiParameter(
+                "frame",
+                location=OpenApiParameter.QUERY,
+                type=OpenApiTypes.INT,
+                required=True,
+                description="Frame number to process",
+            ),
+            OpenApiParameter(
+                "threshold",
+                location=OpenApiParameter.QUERY,
+                type=OpenApiTypes.FLOAT,
+                required=False,
+                description="Minimum confidence threshold for predicted classes",
+            ),
+            OpenApiParameter(
+                "topk",
+                location=OpenApiParameter.QUERY,
+                type=OpenApiTypes.INT,
+                required=False,
+                description="Number of top classes to keep",
+            ),
+        ],
+        responses={"200": OpenApiResponse(description="Classification finished and tags saved")},
+    )
+    @action(detail=True, methods=["POST"], url_path="auto-classify")
+    def auto_classify(self, request: ExtendedRequest, pk: int):
+        from cvat.apps.engine.background import run_yolov8cls_inference_frame
+
+        db_job = self.get_object()
+
+        frame = request.query_params.get("frame")
+        if frame is None:
+            raise ValidationError("frame is required")
+
+        threshold = float(request.query_params.get("threshold", 0.0))
+        topk = int(request.query_params.get("topk", 1))
+
+        run_yolov8cls_inference_frame(
+            job_id=db_job.id,
+            task_id=db_job.segment.task.id,
+            frame=int(frame),
+            threshold=threshold,
+            topk=topk,
+        )
+
+        return Response(status=200)
+
+    @extend_schema(
+        methods=["POST"],
+        summary="Generate interactive SAM segmentation mask for a frame",
+        parameters=[
+            OpenApiParameter(
+                "frame",
+                location=OpenApiParameter.QUERY,
+                type=OpenApiTypes.INT,
+                required=True,
+                description="Frame number to process",
+            ),
+            OpenApiParameter(
+                "label_id",
+                location=OpenApiParameter.QUERY,
+                type=OpenApiTypes.INT,
+                required=False,
+                description="Optional label id to assign to created mask (defaults to first job label)",
+            ),
+            OpenApiParameter(
+                "multimask_output",
+                location=OpenApiParameter.QUERY,
+                type=OpenApiTypes.BOOL,
+                required=False,
+                description="Ask SAM service for multi-mask output and pick best score",
+            ),
+        ],
+        responses={"200": OpenApiResponse(description="Segmentation finished and mask saved")},
+    )
+    @action(detail=True, methods=["POST"], url_path="sam-segment")
+    def sam_segment(self, request: ExtendedRequest, pk: int):
+        import json
+
+        from cvat.apps.engine.background import run_sam_segmentation_frame
+
+        db_job = self.get_object()
+
+        frame = request.query_params.get("frame")
+        if frame is None:
+            raise ValidationError("frame is required")
+
+        label_id = request.query_params.get("label_id")
+        multimask_output_raw = request.query_params.get("multimask_output", "false")
+        multimask_output = str(multimask_output_raw).strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "y",
+            "on",
+        }
+
+        def _load_json_if_needed(value):
+            if isinstance(value, str):
+                stripped = value.strip()
+                if not stripped:
+                    return None
+                return json.loads(stripped)
+            return value
+
+        pos_points = request.data.get("pos_points", [])
+        neg_points = request.data.get("neg_points", [])
+        bbox = request.data.get("bbox")
+        pos_points = _load_json_if_needed(pos_points) or []
+        neg_points = _load_json_if_needed(neg_points) or []
+        bbox = _load_json_if_needed(bbox)
+
+        run_sam_segmentation_frame(
+            job_id=db_job.id,
+            task_id=db_job.segment.task.id,
+            frame=int(frame),
+            pos_points=pos_points,
+            neg_points=neg_points,
+            bbox=bbox,
+            label_id=(int(label_id) if label_id is not None else None),
+            multimask_output=multimask_output,
+        )
+
+        return Response(status=200)
 
     @tus_chunk_action(detail=True, suffix_base="annotations")
     def append_annotations_chunk(self, request: ExtendedRequest, pk: int, file_id: str):

@@ -62,6 +62,12 @@ cvat-canvas/dist
 cvat-canvas3d/dist
 cvat-ui/dist
 
+# Lux ML services: task models, training runs and SAM checkpoints
+/models
+yolov7/runs
+sam-service/weights/
+/scripts/hasty-cvat-polygons/hasty_exports
+
 # produced by prepare in the root package.json script
 .husky
 

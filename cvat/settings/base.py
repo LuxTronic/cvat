@@ -16,6 +16,7 @@ https://docs.djangoproject.com/en/2.0/ref/settings/
 """
 
 import ast
+import json
 import os
 import tempfile
 import urllib
@@ -257,7 +258,24 @@ MIDDLEWARE = [
     "allauth.account.middleware.AccountMiddleware",
 ]
 
-UI_URL = ""
+# The unified annotation workbench hosts CVAT inside a same-origin iframe.
+X_FRAME_OPTIONS = "SAMEORIGIN"
+
+# Base path CVAT is served under when embedded in the Lux workbench, e.g. "/cvat".
+# Empty means CVAT owns the site root, which is the standalone default.
+UI_URL = os.getenv("CVAT_UI_URL", "").rstrip("/")
+
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv("CVAT_CSRF_TRUSTED_ORIGINS", "").split(",")
+    if origin.strip()
+] or [
+    # Default workbench dev origins, overridden by CVAT_CSRF_TRUSTED_ORIGINS.
+    "http://127.0.0.1:18088",
+    "http://localhost:18088",
+    "http://127.0.0.1:8088",
+    "http://localhost:8088",
+]
 
 ROOT_URLCONF = "cvat.urls"
 
@@ -288,7 +306,7 @@ IAM_ROLES = [IAM_ADMIN_ROLE, "user", "worker"]
 IAM_OPA_URL = os.getenv("CVAT_OPA_URL", "http://opa:8181")
 IAM_OPA_DATA_URL = f"{IAM_OPA_URL}/v1/data"
 LOGIN_URL = "rest_login"
-LOGIN_REDIRECT_URL = "/"
+LOGIN_REDIRECT_URL = UI_URL or "/"
 
 OBJECTS_NOT_RELATED_WITH_ORG = [
     "user",
@@ -313,11 +331,16 @@ AUTHENTICATION_BACKENDS = [
 ACCOUNT_EMAIL_VERIFICATION = "none"
 ACCOUNT_LOGIN_METHODS = {"username", "email"}
 
+
 # set UI url to redirect after a successful e-mail confirmation
 # changed from '/auth/login' to '/auth/email-confirmation' for email confirmation message
-ACCOUNT_EMAIL_CONFIRMATION_ANONYMOUS_REDIRECT_URL = "/auth/email-confirmation"
-ACCOUNT_EMAIL_VERIFICATION_SENT_REDIRECT_URL = "/auth/email-verification-sent"
-INCORRECT_EMAIL_CONFIRMATION_URL = "/auth/incorrect-email-confirmation"
+def _with_ui_url(path: str) -> str:
+    return f"{UI_URL}{path}" if UI_URL else path
+
+
+ACCOUNT_EMAIL_CONFIRMATION_ANONYMOUS_REDIRECT_URL = _with_ui_url("/auth/email-confirmation")
+ACCOUNT_EMAIL_VERIFICATION_SENT_REDIRECT_URL = _with_ui_url("/auth/email-verification-sent")
+INCORRECT_EMAIL_CONFIRMATION_URL = _with_ui_url("/auth/incorrect-email-confirmation")
 
 # Django-RQ
 # https://github.com/rq/django-rq
@@ -374,6 +397,8 @@ RQ_QUEUES = {
     CVAT_QUEUES.AUTO_ANNOTATION.value: {
         **REDIS_INMEM_SETTINGS,
         "DEFAULT_TIMEOUT": "24h",
+        # custom fields
+        "PARSED_JOB_ID_CLASS": "cvat.apps.engine.rq.AutoAnnotateRequestId",
     },
     CVAT_QUEUES.WEBHOOKS.value: {
         **REDIS_INMEM_SETTINGS,
@@ -424,6 +449,80 @@ RQ_EXCEPTION_HANDLERS = [
     "cvat.apps.engine.views.rq_exception_handler",
     "cvat.apps.events.handlers.handle_rq_exception",
 ]
+
+# Lux ML sidecar services (see docker-compose.yml)
+YOLOV7_SERVICE = {
+    "URL": os.getenv("CVAT_YOLOV7_SERVICE_URL", "http://host.docker.internal:8000"),
+    "TIMEOUT": int(os.getenv("CVAT_YOLOV7_SERVICE_TIMEOUT", 300)),
+}
+
+YOLOV8CLS_SERVICE = {
+    "URL": os.getenv("CVAT_YOLOV8CLS_SERVICE_URL", "http://host.docker.internal:8001"),
+    "TIMEOUT": int(os.getenv("CVAT_YOLOV8CLS_SERVICE_TIMEOUT", 300)),
+}
+
+SAM_SERVICE = {
+    "URL": os.getenv("CVAT_SAM_SERVICE_URL", "http://host.docker.internal:8002"),
+    "TIMEOUT": int(os.getenv("CVAT_SAM_SERVICE_TIMEOUT", 300)),
+}
+
+GEMINI = {
+    "URL": os.getenv("CVAT_GEMINI_URL", "https://generativelanguage.googleapis.com"),
+    "API_KEY": os.getenv("CVAT_GEMINI_API_KEY", ""),
+    "MODEL": os.getenv("CVAT_GEMINI_MODEL", "gemini-3-flash-preview"),
+    "TIMEOUT": int(os.getenv("CVAT_GEMINI_TIMEOUT", 500)),
+    "MAX_CONTEXT_FRAMES": int(os.getenv("CVAT_GEMINI_MAX_CONTEXT_FRAMES", 1)),
+}
+
+# Fallback catalog of YOLOv7 detectors offered by the auto-annotate picker when
+# the model registry (LUX_MODEL_CATALOG) is unset or unreachable.
+DEFAULT_LUX_YOLOV7_MODELS = [
+    {
+        "id": "final-pallet-canpack-od-legacy-v5-2",
+        "name": "Final Pallet Canpack OD legacy v5.2",
+        "dataset_family_id": "final-pallet-inspection:final-pallet-canpack-od",
+        "family_key": "final-pallet-canpack-od",
+        "legacy_project_key": "FINAL_PALLET_CANPACK_OD",
+        "model_slot": "canpack_od_trt",
+        "task_type": "object_detection",
+        "model_uri": "s3://luxmodels/Deployed_Models/FINAL_PALLET_CANPACK_OD/FINAL_PALLET_CANPACK_OD_ds_v5.2_yolov7_d6_1280x1280_model/best.pt",
+        "labels": ["dent", "down", "inverted", "missing", "internal_spray"],
+    },
+    {
+        "id": "final-pallet-upstream-od-legacy-v2-1",
+        "name": "Final Pallet Upstream OD legacy v2.1",
+        "dataset_family_id": "final-pallet-inspection:final-pallet-upstream-od",
+        "family_key": "final-pallet-upstream-od",
+        "legacy_project_key": "FINAL_PALLET_UPSTREAM_OD",
+        "model_slot": "upstream_od_trt",
+        "task_type": "object_detection",
+        "model_uri": "s3://luxmodels/Deployed_Models/FINAL_PALLET_UPSTREAM_OD/FINAL_PALLET_UPSTREAM_OD_ds_v2.1_yolov7_w6_1280x1280_model/best.pt",
+        "labels": ["dent", "down", "inverted", "internal_spray"],
+    },
+]
+
+
+def _load_lux_yolov7_models():
+    raw_value = os.getenv("CVAT_LUX_YOLOV7_MODELS", "").strip()
+    if not raw_value:
+        return DEFAULT_LUX_YOLOV7_MODELS
+
+    try:
+        parsed_value = json.loads(raw_value)
+    except json.JSONDecodeError as exc:
+        raise ImproperlyConfigured("CVAT_LUX_YOLOV7_MODELS must be valid JSON") from exc
+
+    if not isinstance(parsed_value, list):
+        raise ImproperlyConfigured("CVAT_LUX_YOLOV7_MODELS must be a JSON list")
+
+    return parsed_value
+
+
+LUX_YOLOV7_MODELS = _load_lux_yolov7_models()
+LUX_MODEL_CATALOG = {
+    "URL": os.getenv("CVAT_LUX_MODEL_CATALOG_URL", "").strip(),
+    "TIMEOUT": int(os.getenv("CVAT_LUX_MODEL_CATALOG_TIMEOUT", 8)),
+}
 
 PERIODIC_RQ_JOBS = [
     {
@@ -492,7 +591,7 @@ CSRF_COOKIE_NAME = "csrftoken"
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/2.0/howto/static-files/
 
-STATIC_URL = "/static/"
+STATIC_URL = os.getenv("CVAT_STATIC_URL", "/static/")
 STATIC_ROOT = BASE_DIR / "static"
 STATIC_ROOT.mkdir(parents=True, exist_ok=True)
 

@@ -5,6 +5,7 @@
 
 import io
 import itertools
+import logging
 from collections import OrderedDict, defaultdict
 from collections.abc import Callable, Generator, Sequence
 from contextlib import nullcontext
@@ -28,12 +29,14 @@ from cvat.apps.dataset_manager.util import TmpDirManager, faster_deepcopy
 from cvat.apps.engine import models, serializers
 from cvat.apps.engine.log import DatasetLogManager
 from cvat.apps.engine.plugins import plugin_decorator
+from cvat.apps.engine.training.annotation_hook import handle_new_annotations
 from cvat.apps.engine.utils import av_scan_paths, take_by
 from cvat.apps.events.handlers import handle_annotations_change
 from cvat.apps.profiler import silk_profile
 from cvat.utils import django_database as db_utils
 
 dlogger = DatasetLogManager()
+logger = logging.getLogger(__name__)
 
 
 class dotdict(OrderedDict):
@@ -1289,11 +1292,102 @@ def put_job_data(pk, data: AnnotationIR | dict, *, db_job: models.Job | None = N
 def patch_job_data(
     pk, data: AnnotationIR | dict, action: PatchAction, *, db_job: models.Job | None = None
 ):
+    def _shape_frames_set(job: models.Job) -> set[int]:
+        # Count detection rectangles coming from both manual and auto-annotation flows.
+        # Keep segmentation-like shapes (mask/polygon/etc.) excluded.
+        return set(
+            job.labeledshape_set.filter(
+                source__in=[
+                    str(models.SourceType.MANUAL),
+                    str(models.SourceType.AUTO),
+                ],
+                type=str(models.ShapeType.RECTANGLE),
+            ).values_list("frame", flat=True)
+        )
+
+    def _tag_frames_set(job: models.Job) -> set[int]:
+        return set(job.labeledimage_set.values_list("frame", flat=True))
+
+    def _payload_supervision_frames(payload: AnnotationIR | dict) -> tuple[set[int], set[int]]:
+        # Read shapes/tags straight off the payload: both AnnotationIR and the
+        # serializer's validated_data expose them, and this avoids re-wrapping
+        # the payload in an AnnotationIR just to iterate it.
+        payload_shapes = payload.shapes if isinstance(payload, AnnotationIR) else payload["shapes"]
+        payload_tags = payload.tags if isinstance(payload, AnnotationIR) else payload["tags"]
+
+        allowed_sources = {
+            str(models.SourceType.MANUAL),
+            str(models.SourceType.AUTO),
+        }
+
+        shape_frames: set[int] = set()
+        for shape in payload_shapes:
+            if str(shape.get("type")) != str(models.ShapeType.RECTANGLE):
+                continue
+
+            source = shape.get("source")
+            # Source can be omitted in some update payloads; treat it as supervised.
+            if source is not None and str(source) not in allowed_sources:
+                continue
+
+            frame = shape.get("frame")
+            if frame is not None:
+                shape_frames.add(int(frame))
+
+        tag_frames: set[int] = set()
+        for tag in payload_tags:
+            frame = tag.get("frame")
+            if frame is not None:
+                tag_frames.add(int(frame))
+
+        return shape_frames, tag_frames
+
     annotation = JobAnnotation(pk, db_job=db_job)
     if action == PatchAction.CREATE:
+        logger.info("[ANNOTATION] Job %s CREATE request received", annotation.db_job.id)
+
+        shape_frames_before = _shape_frames_set(annotation.db_job)
+        tag_frames_before = _tag_frames_set(annotation.db_job)
+
         annotation.create(data)
+
+        newly_shape_frames = _shape_frames_set(annotation.db_job) - shape_frames_before
+        newly_tag_frames = _tag_frames_set(annotation.db_job) - tag_frames_before
+        newly_annotated_frames = newly_shape_frames | newly_tag_frames
+        logger.info(
+            "[ANNOTATION] Job %s newly annotated frames: %s (count=%d, shape=%d, tag=%d)",
+            annotation.db_job.id,
+            sorted(newly_annotated_frames),
+            len(newly_annotated_frames),
+            len(newly_shape_frames),
+            len(newly_tag_frames),
+        )
+
+        if newly_annotated_frames:
+            handle_new_annotations(
+                job_id=annotation.db_job.id,
+                shape_frames=len(newly_shape_frames),
+                tag_frames=len(newly_tag_frames),
+            )
     elif action == PatchAction.UPDATE:
+        touched_shape_frames, touched_tag_frames = _payload_supervision_frames(data)
         annotation.update(data)
+        touched_frames = touched_shape_frames | touched_tag_frames
+        logger.info(
+            "[ANNOTATION] Job %s updated supervision frames: %s (count=%d, shape=%d, tag=%d)",
+            annotation.db_job.id,
+            sorted(touched_frames),
+            len(touched_frames),
+            len(touched_shape_frames),
+            len(touched_tag_frames),
+        )
+
+        if touched_frames:
+            handle_new_annotations(
+                job_id=annotation.db_job.id,
+                shape_frames=len(touched_shape_frames),
+                tag_frames=len(touched_tag_frames),
+            )
     elif action == PatchAction.DELETE:
         return annotation.delete(data)
 
