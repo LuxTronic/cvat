@@ -4,7 +4,7 @@ ARG BASE_IMAGE=ubuntu:24.04
 
 FROM ${BASE_IMAGE} AS build-image-base
 
-RUN apt-get update && \
+RUN apt-get -o Acquire::Retries=5 update && \
     DEBIAN_FRONTEND=noninteractive apt-get --no-install-recommends install -yq \
         cargo-1.85 \
         curl \
@@ -112,7 +112,7 @@ ARG CVAT_CONFIGURATION="production"
 ENV DJANGO_SETTINGS_MODULE="cvat.settings.${CVAT_CONFIGURATION}"
 
 # Install necessary apt packages
-RUN apt-get update && \
+RUN apt-get -o Acquire::Retries=5 update && \
     DEBIAN_FRONTEND=noninteractive apt-get --no-install-recommends install -yq \
         adduser \
         bzip2 \
@@ -152,7 +152,7 @@ ENV CVAT_BASE_DIR=/home/${USER}
 
 ARG CLAM_AV="no"
 RUN if [ "$CLAM_AV" = "yes" ]; then \
-        apt-get update && \
+        apt-get -o Acquire::Retries=5 update && \
         apt-get --no-install-recommends install -yq \
             clamav \
             libclamunrar && \
