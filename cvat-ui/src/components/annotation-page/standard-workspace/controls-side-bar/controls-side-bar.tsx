@@ -41,6 +41,7 @@ import GroupControl, { Props as GroupControlProps } from './group-control';
 import JoinControl, { Props as JoinControlProps } from './join-control';
 import SplitControl, { Props as SplitControlProps } from './split-control';
 import SliceControl, { Props as SliceControlProps } from './slice-control';
+import AutoAnnotateControl from './auto-annotate-control';
 
 type Label = CombinedState['annotation']['job']['labels'][0];
 
@@ -380,6 +381,7 @@ export default function ControlsSideBarComponent(props: Props): JSX.Element {
 
                 <ObservedToolsControl />
                 <ObservedOpenCVControl />
+                <AutoAnnotateControl />
                 {
                     rectangleControlVisible && (
                         <ObservedDrawRectangleControl
