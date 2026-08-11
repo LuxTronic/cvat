@@ -855,6 +855,7 @@ def run_yolov7_inference_frame(
     # Call YOLOv7 service
     # ------------------------------------------------------------------
     yolo_url = f"{settings.YOLOV7_SERVICE['URL']}/infer"
+    request_timeout = int(settings.YOLOV7_SERVICE.get("TIMEOUT", 300))
 
     log.info(
         "[AUTO-ANNOTATE] Calling YOLO service | url=%s task_id=%s model_id=%s",
@@ -873,7 +874,7 @@ def run_yolov7_inference_frame(
         yolo_url,
         params=params,
         files={"image": ("frame.jpg", image_bytes, frame_data.mime)},
-        timeout=settings.YOLOV7_SERVICE.get("TIMEOUT", 300),
+        timeout=request_timeout,
     )
 
     if not response.ok:
@@ -1025,11 +1026,12 @@ def run_yolov8cls_inference_frame(
     )
 
     yolo_url = f"{settings.YOLOV8CLS_SERVICE['URL']}/infer"
+    request_timeout = int(settings.YOLOV8CLS_SERVICE.get("TIMEOUT", 300))
     response = requests.post(
         yolo_url,
         params={"task_id": task_id, "topk": max(int(topk), 1)},
         files={"image": ("frame.jpg", image_bytes, frame_data.mime)},
-        timeout=settings.YOLOV8CLS_SERVICE.get("TIMEOUT", 300),
+        timeout=request_timeout,
     )
 
     if not response.ok:
@@ -1200,6 +1202,7 @@ def run_sam_segmentation_frame(
     )
 
     sam_url = f"{settings.SAM_SERVICE['URL']}/infer"
+    request_timeout = int(settings.SAM_SERVICE.get("TIMEOUT", 300))
     response = requests.post(
         sam_url,
         params={"task_id": task_id},
@@ -1210,7 +1213,7 @@ def run_sam_segmentation_frame(
             "bbox": json.dumps(bbox) if bbox is not None else "",
             "multimask_output": str(bool(multimask_output)).lower(),
         },
-        timeout=settings.SAM_SERVICE.get("TIMEOUT", 300),
+        timeout=request_timeout,
     )
     t_sam_response = time.perf_counter()
 

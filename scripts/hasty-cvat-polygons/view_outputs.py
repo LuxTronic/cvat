@@ -7,7 +7,6 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-
 IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".bmp", ".webp")
 
 
@@ -54,10 +53,14 @@ def load_class_names(json_path: Path, classes_file: Path) -> list[str]:
             names = [name for name in names if name]
             if names:
                 return names
-        except Exception:
+        except (OSError, ValueError, KeyError):
             pass
     if classes_file.exists():
-        return [line.strip() for line in classes_file.read_text(encoding="utf-8").splitlines() if line.strip()]
+        return [
+            line.strip()
+            for line in classes_file.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
     return []
 
 
@@ -91,7 +94,9 @@ def build_image_lookup(images_dir: Path) -> dict[str, list[Path]]:
     return lookup
 
 
-def resolve_image_for_stem(images_dir: Path, stem: str, image_lookup: dict[str, list[Path]]) -> Path | None:
+def resolve_image_for_stem(
+    images_dir: Path, stem: str, image_lookup: dict[str, list[Path]]
+) -> Path | None:
     direct = find_image_for_stem(images_dir, stem)
     if direct is not None:
         return direct

@@ -26,7 +26,9 @@ def load_export(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def sanitize_bbox_xyxy(bbox: list[float], img_w: int, img_h: int) -> tuple[int, int, int, int] | None:
+def sanitize_bbox_xyxy(
+    bbox: list[float], img_w: int, img_h: int
+) -> tuple[int, int, int, int] | None:
     if len(bbox) != 4:
         return None
     x1_raw, y1_raw, x2_raw, y2_raw = bbox

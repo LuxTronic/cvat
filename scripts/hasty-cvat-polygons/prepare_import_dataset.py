@@ -9,7 +9,6 @@ from uuid import NAMESPACE_URL, uuid5
 
 from segment import load_class_to_index, load_json_export
 
-
 IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".bmp", ".webp")
 SCRIPT_DIR = Path(__file__).resolve().parent
 HASTY_ROOT = SCRIPT_DIR / "hasty_exports"
@@ -132,7 +131,9 @@ def resolve_image_for_stem(
     return candidates[0]
 
 
-def write_yaml(path: Path, dataset_root: Path, split: str, names: dict[int, str], include_val: bool) -> None:
+def write_yaml(
+    path: Path, dataset_root: Path, split: str, names: dict[int, str], include_val: bool
+) -> None:
     lines = [
         f"path: {dataset_root.as_posix()}",
         f"train: images/{split}",
@@ -198,7 +199,9 @@ def build_label_classes(index_to_class: dict[int, str], export_data: dict) -> li
     return label_classes
 
 
-def parse_yolo_seg_row(row: str, img_w: int, img_h: int) -> tuple[int, list[list[int]], list[int]] | None:
+def parse_yolo_seg_row(
+    row: str, img_w: int, img_h: int
+) -> tuple[int, list[list[int]], list[int]] | None:
     parts = row.strip().split()
     if len(parts) < 7:
         return None
@@ -231,7 +234,9 @@ def parse_yolo_seg_row(row: str, img_w: int, img_h: int) -> tuple[int, list[list
     return class_id, polygon, bbox
 
 
-def package_for_cvat(args: argparse.Namespace, export_data: dict, index_to_class: dict[int, str]) -> None:
+def package_for_cvat(
+    args: argparse.Namespace, export_data: dict, index_to_class: dict[int, str]
+) -> None:
     images_out = args.output_root / "images" / args.split
     labels_out = args.output_root / "labels" / args.split
     yaml_out = args.output_root / "dataset.yaml"
@@ -276,7 +281,9 @@ def package_for_cvat(args: argparse.Namespace, export_data: dict, index_to_class
     zip_out: Path | None = None
     if not args.no_zip:
         zip_base = args.output_root.parent / args.output_root.name
-        zip_out_str = shutil.make_archive(str(zip_base), "zip", root_dir=args.output_root.parent, base_dir=args.output_root.name)
+        zip_out_str = shutil.make_archive(
+            str(zip_base), "zip", root_dir=args.output_root.parent, base_dir=args.output_root.name
+        )
         zip_out = Path(zip_out_str)
 
     print("Done")
@@ -291,7 +298,9 @@ def package_for_cvat(args: argparse.Namespace, export_data: dict, index_to_class
         print(f"ZIP: {zip_out}")
 
 
-def package_for_hasty(args: argparse.Namespace, export_data: dict, index_to_class: dict[int, str]) -> None:
+def package_for_hasty(
+    args: argparse.Namespace, export_data: dict, index_to_class: dict[int, str]
+) -> None:
     images_by_stem = {
         Path(image.get("image_name", "")).stem: image
         for image in export_data.get("images", [])
@@ -324,7 +333,11 @@ def package_for_hasty(args: argparse.Namespace, export_data: dict, index_to_clas
             skipped_no_metadata += 1
             continue
 
-        rows = [row.strip() for row in label_path.read_text(encoding="utf-8").splitlines() if row.strip()]
+        rows = [
+            row.strip()
+            for row in label_path.read_text(encoding="utf-8").splitlines()
+            if row.strip()
+        ]
         labels = []
         for label_index, row in enumerate(rows):
             parsed = parse_yolo_seg_row(row, width, height)

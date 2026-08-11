@@ -108,7 +108,9 @@ def api_post(session: requests.Session, path: str, **kwargs: Any) -> requests.Re
 
 def login_and_get_token(host: str, username: str, password: str) -> tuple[str, str]:
     if not username or not password:
-        raise RuntimeError("Missing CVAT credentials. Set CVAT_TOKEN or CVAT_USERNAME/CVAT_PASSWORD.")
+        raise RuntimeError(
+            "Missing CVAT credentials. Set CVAT_TOKEN or CVAT_USERNAME/CVAT_PASSWORD."
+        )
 
     s = build_session_noauth(host)
     body: dict[str, Any] | None = None
@@ -181,7 +183,9 @@ def start_project_dataset_import(
     return None
 
 
-def wait_for_request(session: requests.Session, rq_id: str, poll_seconds: float, timeout_seconds: int) -> None:
+def wait_for_request(
+    session: requests.Session, rq_id: str, poll_seconds: float, timeout_seconds: int
+) -> None:
     deadline = time.time() + timeout_seconds
     last_status = ""
     while time.time() < deadline:

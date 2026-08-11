@@ -128,7 +128,8 @@ def _run_training(task_id: int, dataset_dir: str, epochs: int, imgsz: int):
             next_version,
         )
 
-        subprocess.check_call(cmd, cwd=str(YOLO_ROOT))
+        # Fixed argv assembled above, no shell.
+        subprocess.check_call(cmd, cwd=str(YOLO_ROOT))  # nosec B603
         _activate_latest_model(task_id)
 
         r.delete(f"task:{task_id}:frames")

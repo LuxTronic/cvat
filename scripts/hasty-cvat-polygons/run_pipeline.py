@@ -5,7 +5,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 SCRIPT_DIR = Path(__file__).resolve().parent
 
 
@@ -56,7 +55,8 @@ def parse_args() -> argparse.Namespace:
 
 def run_step(args: list[str]) -> None:
     print("\n$ " + " ".join(args))
-    result = subprocess.run(args, cwd=SCRIPT_DIR)
+    # Fixed argv built from CLI flags, no shell.
+    result = subprocess.run(args, cwd=SCRIPT_DIR, check=False)  # nosec B603
     if result.returncode != 0:
         raise RuntimeError(f"Step failed with exit code {result.returncode}: {' '.join(args)}")
 
@@ -67,7 +67,13 @@ def main() -> None:
     device = "cuda:0" if args.device == "gpu" else args.device
 
     if not args.skip_fetch:
-        cmd = [py, str(SCRIPT_DIR / "fetch_hasty_exports.py"), "--project-id", args.project_id, "--overwrite"]
+        cmd = [
+            py,
+            str(SCRIPT_DIR / "fetch_hasty_exports.py"),
+            "--project-id",
+            args.project_id,
+            "--overwrite",
+        ]
         for ds in args.dataset_id:
             cmd.extend(["--dataset-id", ds])
         run_step(cmd)

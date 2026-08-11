@@ -68,7 +68,12 @@ def _get_predictor() -> SamPredictor:
             return PREDICTOR
 
         _ensure_checkpoint()
-        log.info("[SAM] Loading model | type=%s | device=%s | checkpoint=%s", MODEL_TYPE, DEVICE, CHECKPOINT)
+        log.info(
+            "[SAM] Loading model | type=%s | device=%s | checkpoint=%s",
+            MODEL_TYPE,
+            DEVICE,
+            CHECKPOINT,
+        )
         sam_model = sam_model_registry[MODEL_TYPE](checkpoint=str(CHECKPOINT))
         sam_model.to(device=DEVICE)
         PREDICTOR = SamPredictor(sam_model)
@@ -90,7 +95,11 @@ def _normalize_bbox(raw_bbox: Any) -> Optional[np.ndarray]:
     if raw_bbox is None:
         return None
 
-    if isinstance(raw_bbox, list) and len(raw_bbox) == 2 and all(isinstance(p, list) and len(p) == 2 for p in raw_bbox):
+    if (
+        isinstance(raw_bbox, list)
+        and len(raw_bbox) == 2
+        and all(isinstance(p, list) and len(p) == 2 for p in raw_bbox)
+    ):
         (x1, y1), (x2, y2) = raw_bbox
         return np.array([x1, y1, x2, y2], dtype=np.float32)
 
@@ -195,9 +204,7 @@ async def infer(
             (t_serialize_end - t_serialize_start) * 1000,
         )
 
-        return JSONResponse(
-            content=response_body
-        )
+        return JSONResponse(content=response_body)
     except Exception as ex:
         log.exception("[SAM] infer failed")
         return JSONResponse(status_code=500, content={"error": str(ex)})

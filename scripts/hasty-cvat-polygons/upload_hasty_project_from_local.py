@@ -8,8 +8,7 @@ from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-from env_utils import load_env_from_parents
-
+from env_utils import load_env_from_parents, require_http_url
 
 API_BASE = "https://api.hasty.ai/v1"
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -51,16 +50,18 @@ def get_api_key() -> str:
     return key
 
 
-def api_json_request(method: str, url: str, api_key: str, payload: dict | list | None = None) -> dict:
+def api_json_request(
+    method: str, url: str, api_key: str, payload: dict | list | None = None
+) -> dict:
     body = None
     headers = {"X-Api-Key": api_key}
     if payload is not None:
         body = json.dumps(payload).encode("utf-8")
         headers["Content-Type"] = "application/json"
 
-    req = Request(url=url, method=method, headers=headers, data=body)
+    req = Request(url=require_http_url(url), method=method, headers=headers, data=body)
     try:
-        with urlopen(req, timeout=120) as resp:
+        with urlopen(req, timeout=120) as resp:  # nosec B310 - scheme checked above
             raw = resp.read().decode("utf-8")
     except HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
@@ -75,7 +76,9 @@ def discover_datasets(images_root: Path, import_json: Path) -> list[str]:
     names: set[str] = set()
 
     if images_root.exists():
-        folders = sorted([p for p in images_root.iterdir() if p.is_dir()], key=lambda x: x.name.lower())
+        folders = sorted(
+            [p for p in images_root.iterdir() if p.is_dir()], key=lambda x: x.name.lower()
+        )
         if folders:
             for folder in folders:
                 if folder.name.strip():

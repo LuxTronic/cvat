@@ -46,7 +46,8 @@ def _resolve_classification_dataset_dir(data_dir: Path) -> Path:
         train_dir.mkdir(parents=True, exist_ok=True)
         val_dir.mkdir(parents=True, exist_ok=True)
 
-        rng = random.Random(42)
+        # Fixed seed for a reproducible train/val split, not security.
+        rng = random.Random(42)  # nosec B311
 
         for cls_dir in sorted(classes, key=lambda p: p.name):
             image_paths = [p for p in cls_dir.rglob("*") if p.is_file() and _is_image_file(p)]
@@ -83,7 +84,8 @@ def _resolve_classification_dataset_dir(data_dir: Path) -> Path:
                 shutil.rmtree(no_label_dir)
 
         val_dir.mkdir(parents=True, exist_ok=True)
-        rng = random.Random(42)
+        # Fixed seed for a reproducible train/val split, not security.
+        rng = random.Random(42)  # nosec B311
 
         class_dirs = [p for p in train_dir.iterdir() if p.is_dir() and p.name != "__MACOSX"]
         for cls_dir in sorted(class_dirs, key=lambda p: p.name):

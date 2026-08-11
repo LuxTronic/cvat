@@ -11,8 +11,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
-from env_utils import load_env_from_parents
-
+from env_utils import load_env_from_parents, require_http_url
 
 API_BASE = "https://api.hasty.ai/v1"
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -108,15 +107,17 @@ def api_json_request(
         body = json.dumps(payload).encode("utf-8")
         headers["Content-Type"] = "application/json"
 
-    req = Request(url=url, method=method, headers=headers, data=body)
-    with urlopen(req, timeout=60) as resp:
+    req = Request(url=require_http_url(url), method=method, headers=headers, data=body)
+    with urlopen(req, timeout=60) as resp:  # nosec B310 - scheme checked above
         data = resp.read().decode("utf-8")
     if not data:
         return {}
     return json.loads(data)
 
 
-def start_export(project_id: str, api_key: str, fmt: str, export_name: str, dataset_ids: list[str]) -> str:
+def start_export(
+    project_id: str, api_key: str, fmt: str, export_name: str, dataset_ids: list[str]
+) -> str:
     payload: dict[str, object] = {
         "format": fmt,
         "export_name": export_name,
@@ -132,7 +133,9 @@ def start_export(project_id: str, api_key: str, fmt: str, export_name: str, data
     return export_id
 
 
-def wait_for_export_done(project_id: str, api_key: str, export_id: str, poll_seconds: float, timeout_seconds: int) -> dict:
+def wait_for_export_done(
+    project_id: str, api_key: str, export_id: str, poll_seconds: float, timeout_seconds: int
+) -> dict:
     url = f"{API_BASE}/projects/{project_id}/exports/{export_id}"
     deadline = time.time() + timeout_seconds
     last_status = ""
@@ -152,8 +155,8 @@ def wait_for_export_done(project_id: str, api_key: str, export_id: str, poll_sec
 
 def download_url_to_path(url: str, out_path: Path) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    req = Request(url=url, method="GET")
-    with urlopen(req, timeout=300) as resp, out_path.open("wb") as f:
+    req = Request(url=require_http_url(url), method="GET")
+    with urlopen(req, timeout=300) as resp, out_path.open("wb") as f:  # nosec B310
         shutil.copyfileobj(resp, f)
 
 

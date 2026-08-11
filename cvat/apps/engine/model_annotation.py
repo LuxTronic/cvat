@@ -5,6 +5,7 @@ import json
 import logging
 import re
 from collections.abc import Iterable
+from contextlib import suppress
 from io import BytesIO
 
 import requests
@@ -149,10 +150,8 @@ def _extract_json(response_text: str) -> dict | list:
     first_object = response_text.find("{")
     last_object = response_text.rfind("}")
     if first_object >= 0 and last_object > first_object:
-        try:
+        with suppress(Exception):
             return json.loads(response_text[first_object : last_object + 1])
-        except Exception:  # noqa: BLE001
-            pass
 
     first_array = response_text.find("[")
     last_array = response_text.rfind("]")

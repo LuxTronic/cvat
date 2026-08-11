@@ -9,7 +9,6 @@ import cv2
 import numpy as np
 from ultralytics import SAM
 
-
 SCRIPT_DIR = Path(__file__).resolve().parent
 HASTY_ROOT = SCRIPT_DIR / "hasty_exports"
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff"}
@@ -80,13 +79,23 @@ def load_json_export(path: Path) -> dict:
 
 def load_class_to_index(classes_file: Path, export_data: dict) -> dict[str, int]:
     class_names: list[str] = []
-    class_names = [c.get("class_name", "").strip() for c in export_data.get("label_classes", []) if c.get("class_name")]
+    class_names = [
+        c.get("class_name", "").strip()
+        for c in export_data.get("label_classes", [])
+        if c.get("class_name")
+    ]
     if not class_names and classes_file.exists():
-        class_names = [line.strip() for line in classes_file.read_text(encoding="utf-8").splitlines() if line.strip()]
+        class_names = [
+            line.strip()
+            for line in classes_file.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
     return {name: idx for idx, name in enumerate(class_names)}
 
 
-def sanitize_bbox_xyxy(bbox: list[float], img_w: int, img_h: int) -> tuple[int, int, int, int] | None:
+def sanitize_bbox_xyxy(
+    bbox: list[float], img_w: int, img_h: int
+) -> tuple[int, int, int, int] | None:
     if len(bbox) != 4:
         return None
     x1_raw, y1_raw, x2_raw, y2_raw = bbox
@@ -184,7 +193,9 @@ def box_to_polygon(x1: int, y1: int, x2: int, y2: int) -> np.ndarray:
     return np.asarray([[x1, y1], [x2, y1], [x2, y2], [x1, y2]], dtype=np.float32)
 
 
-def generate_ultralytics_seg_row(class_id: int, polygon_xy: np.ndarray, img_w: int, img_h: int) -> str | None:
+def generate_ultralytics_seg_row(
+    class_id: int, polygon_xy: np.ndarray, img_w: int, img_h: int
+) -> str | None:
     """Build one Ultralytics YOLO-seg import row: '<class> x1 y1 x2 y2 ...'."""
     if polygon_xy.shape[0] < 3:
         return None
@@ -215,7 +226,9 @@ def build_image_lookup(images_dir: Path) -> dict[str, list[Path]]:
     return lookup
 
 
-def resolve_image_path(images_dir: Path, image_entry: dict, image_lookup: dict[str, list[Path]]) -> Path | None:
+def resolve_image_path(
+    images_dir: Path, image_entry: dict, image_lookup: dict[str, list[Path]]
+) -> Path | None:
     image_name = image_entry.get("image_name")
     if not image_name:
         return None
@@ -407,7 +420,9 @@ def main() -> None:
         total_ok += ok
         total_failed += failed
         total_unknown_class += unknown
-        print(f"[{Path(image_name).stem}] objects={len(labels)} ok={ok} failed={failed} unknown_class={unknown}")
+        print(
+            f"[{Path(image_name).stem}] objects={len(labels)} ok={ok} failed={failed} unknown_class={unknown}"
+        )
 
     print("\nDone")
     print(f"Processed images: {total_images}")
