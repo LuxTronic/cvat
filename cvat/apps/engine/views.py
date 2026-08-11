@@ -2652,7 +2652,10 @@ class JobViewSet(
 
         frame = int(frame)
 
-        task_id = db_job.segment.task.data.id
+        # The YOLOv7 sidecar indexes per-task detectors by the task's Data id, and
+        # retrain_detection_task_model exports the training set under that same id.
+        # This is deliberately not Task.id, unlike auto_classify and sam_segment.
+        service_task_id = db_job.segment.task.data.id
         model_id = request.query_params.get("model_id", "")
         if not model_id and isinstance(request.data, dict):
             model_id = request.data.get("model_id", "")
@@ -2671,7 +2674,7 @@ class JobViewSet(
         # Run inference synchronously
         run_yolov7_inference_frame(
             job_id=db_job.id,
-            task_id=task_id,
+            task_id=service_task_id,
             frame=frame,
             model_id=model_id or "",
             model_uri=model_uri,

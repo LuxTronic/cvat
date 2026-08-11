@@ -107,15 +107,27 @@ def _run_training(task_id: int, dataset_dir: str, epochs: int, imgsz: int):
         next_version = f"v{len(_list_versions(task_id)) + 1}"
 
         # Run training in a separate Python process for better isolation/logging.
+        # Values are passed as argv, never spliced into the program text: a quote
+        # in any of them would otherwise close the literal and execute.
+        trainer = (
+            "import sys\n"
+            "from ultralytics import YOLO\n"
+            "weights, data, project, name, epochs, imgsz = sys.argv[1:7]\n"
+            "YOLO(weights).train(\n"
+            "    data=data, project=project, name=name,\n"
+            "    epochs=int(epochs), imgsz=int(imgsz),\n"
+            ")\n"
+        )
         cmd = [
             "python",
             "-c",
-            (
-                "from ultralytics import YOLO; "
-                f"model = YOLO(r'{str(BASE_WEIGHTS)}'); "
-                f"model.train(data=r'{dataset_dir}', epochs={int(epochs)}, imgsz={int(imgsz)}, "
-                f"project=r'{str(task_dir)}', name=r'{next_version}')"
-            ),
+            trainer,
+            str(BASE_WEIGHTS),
+            str(dataset_dir),
+            str(task_dir),
+            str(next_version),
+            str(int(epochs)),
+            str(int(imgsz)),
         ]
 
         log.info(

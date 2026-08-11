@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 from pathlib import Path
 
@@ -8,11 +10,16 @@ from .model_paths import yolo8cls_task_data_dir, yolo_task_data_dir
 log = logging.getLogger(__name__)
 
 
-def export_task_to_yolo(task_id: int) -> Path:
+def export_task_to_yolo(task_id: int, *, data_dir: Path | None = None) -> Path:
     """
     Export task annotations + images to YOLO ZIP.
+
+    ``data_dir`` lets the caller pin the output location. The YOLOv7 service keys
+    models by the task's Data id rather than its Task id, so the caller decides
+    which one the dataset lands under.
     """
-    data_dir = yolo_task_data_dir(task_id)
+    if data_dir is None:
+        data_dir = yolo_task_data_dir(task_id)
     data_dir.mkdir(parents=True, exist_ok=True)
 
     zip_path = data_dir / "dataset.zip"

@@ -127,22 +127,27 @@ def _resolve_classification_dataset_dir(data_dir: Path) -> Path:
 def retrain_detection_task_model(task_id: int):
     log.info("[TRAINER] Starting detection retraining for task %s", task_id)
 
-    ensure_task_dirs(task_id)
-    data_dir = yolo_task_data_dir(task_id)
+    task = Task.objects.get(id=task_id)
 
-    zip_path = export_task_to_yolo(task_id)
+    # The YOLOv7 service indexes models under the task's Data id, and the
+    # auto-annotate endpoint reads them back from the same place. The dataset has
+    # to be exported under that same id: keying the export off Task.id while
+    # training under Data.id pointed /train at a data.yaml that did not exist.
+    service_task_id = task.data.id
+
+    ensure_task_dirs(service_task_id)
+    data_dir = yolo_task_data_dir(service_task_id)
+
+    zip_path = export_task_to_yolo(task_id, data_dir=data_dir)
     unpack_yolo_dataset(zip_path, data_dir)
     remove_unlabeled_images(data_dir)
     clear_yolo_cache(data_dir)
     log.info("[TRAINER] Cleared YOLO detection cache for task %s", task_id)
 
-    task = Task.objects.get(id=task_id)
     labels = task.project.label_set.all() if task.project_id else task.label_set.all()
     class_names = [l.name for l in labels]
     ensure_data_yaml(data_dir, class_names)
 
-    # Keep YOLOv7 service model indexing behavior based on task.data.id.
-    service_task_id = task.data.id
     resp = requests.post(
         f"{settings.YOLOV7_SERVICE['URL']}/train",
         json={"task_id": service_task_id},

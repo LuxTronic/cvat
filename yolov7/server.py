@@ -3,6 +3,8 @@ import re
 import threading
 import subprocess
 import logging
+import time
+import uuid
 from pathlib import Path
 from typing import Dict
 from urllib.parse import urlparse
@@ -67,11 +69,34 @@ def _safe_model_id(value: str) -> str:
     return re.sub(r"[^A-Za-z0-9_.-]+", "_", value or "selected_model").strip("_") or "selected_model"
 
 
+# Weights are unpickled by attempt_load(), so loading a checkpoint executes
+# whatever the file contains. Restrict where they may come from: an unrestricted
+# model_uri would let any caller on this network run code in this container.
+ALLOWED_MODEL_BUCKETS = {
+    bucket.strip()
+    for bucket in os.environ.get("MODEL_BUCKET_ALLOWLIST", "luxmodels").split(",")
+    if bucket.strip()
+}
+ALLOWED_MODEL_KEY_PREFIXES = tuple(
+    prefix.strip()
+    for prefix in os.environ.get("MODEL_KEY_PREFIX_ALLOWLIST", "Deployed_Models/").split(",")
+    if prefix.strip()
+)
+
+
 def _parse_s3_uri(model_uri: str):
     parsed = urlparse(model_uri)
     if parsed.scheme != "s3" or not parsed.netloc or not parsed.path.strip("/"):
         raise RuntimeError(f"Unsupported model URI: {model_uri}")
-    return parsed.netloc, parsed.path.lstrip("/")
+
+    bucket, key = parsed.netloc, parsed.path.lstrip("/")
+
+    if bucket not in ALLOWED_MODEL_BUCKETS:
+        raise RuntimeError(f"Model bucket is not allowlisted: {bucket}")
+    if ALLOWED_MODEL_KEY_PREFIXES and not key.startswith(ALLOWED_MODEL_KEY_PREFIXES):
+        raise RuntimeError(f"Model key is not under an allowlisted prefix: {key}")
+
+    return bucket, key
 
 
 def _download_s3_model(model_uri: str, weights_path: Path) -> None:
@@ -330,10 +355,22 @@ async def infer(
 
 @app.post("/train")
 def train_task(payload: dict):
-    task_id = payload["task_id"]
+    # Coerce before the value reaches a path: "../../../etc" would otherwise
+    # escape the model tree and land training artifacts anywhere writable.
+    try:
+        task_id = int(payload["task_id"])
+    except (KeyError, TypeError, ValueError):
+        return JSONResponse(
+            status_code=400, content={"error": "task_id is required and must be an integer"}
+        )
 
     task_dir = YOLO_MODELS_ROOT / f"task_{task_id}"
     data_yaml = task_dir / "data" / "data.yaml"
+
+    if not data_yaml.exists():
+        return JSONResponse(
+            status_code=400, content={"error": f"No dataset for task {task_id}: {data_yaml} missing"}
+        )
 
     cmd = [
         "python", "train.py",
@@ -348,7 +385,9 @@ def train_task(payload: dict):
         "--workers", "8",
         "--notest",
         "--project", str(task_dir),
-        "--name", f"v{len(list(task_dir.glob('v*'))) + 1}",
+        # A directory count races when two /train calls arrive together; the
+        # submit timestamp keeps concurrent runs in separate directories.
+        "--name", f"v{time.strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:8]}",
     ]
 
 
