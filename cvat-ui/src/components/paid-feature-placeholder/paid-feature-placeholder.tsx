@@ -11,6 +11,7 @@ import { Row, Col } from 'antd/es/grid';
 import './styles.scss';
 import CVATMarkdown from 'components/common/cvat-markdown';
 import config from 'config';
+import { withUIBasePath } from 'utils/base-path';
 
 interface Props {
     featureDescription: string;
@@ -26,7 +27,7 @@ function PaidFeaturePlaceholder(props: Readonly<Props>): JSX.Element | null {
         <div className='cvat-paid-feature-placeholder-wrapper'>
             <Card
                 className='cvat-paid-feature-placeholder'
-                cover={<img src='/assets/paid-feature.png' alt='some text' />}
+                cover={<img src={withUIBasePath('/assets/paid-feature.png')} alt='some text' />}
             >
                 <Row className='cvat-paid-feature-placeholder-inner-wrapper'>
                     <Col span={24}>

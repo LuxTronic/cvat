@@ -1,4 +1,5 @@
 import React from 'react';
+import { useSelector } from 'react-redux';
 import Popover from 'antd/lib/popover';
 import Icon from '@ant-design/icons';
 
@@ -8,6 +9,7 @@ import { ShapeType } from 'cvat-core-wrapper';
 
 import { SkeletonIcon } from 'icons';
 
+import { CombinedState } from 'reducers';
 import CVATTooltip from 'components/common/cvat-tooltip';
 import DrawShapePopoverContainer from 'containers/annotation-page/standard-workspace/controls-side-bar/draw-shape-popover';
 import withVisibilityHandling from './handle-popover-visibility';
@@ -21,6 +23,7 @@ export interface Props {
 const CustomPopover = withVisibilityHandling(Popover, 'draw-skeleton');
 function DrawSkeletonControl(props: Props): JSX.Element {
     const { canvasInstance, isDrawing, disabled } = props;
+    const { normalizedKeyMap } = useSelector((state: CombinedState) => state.shortcuts);
     const dynamicPopoverProps = isDrawing ? {
         overlayStyle: {
             display: 'none',
@@ -45,7 +48,12 @@ function DrawSkeletonControl(props: Props): JSX.Element {
             placement='right'
             content={<DrawShapePopoverContainer shapeType={ShapeType.SKELETON} />}
         >
-            <CVATTooltip title='Draw a skeleton' placement='right'>
+            <CVATTooltip
+                title={`Draw a skeleton. ${canvasInstance instanceof Canvas ?
+                    normalizedKeyMap.SWITCH_DRAW_MODE_STANDARD_CONTROLS :
+                    normalizedKeyMap.SWITCH_DRAW_MODE_STANDARD_3D_CONTROLS} repeats last drawing action`}
+                placement='right'
+            >
                 <Icon {...dynamicIconProps} component={SkeletonIcon} />
             </CVATTooltip>
         </CustomPopover>

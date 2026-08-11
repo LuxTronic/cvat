@@ -189,7 +189,8 @@ const componentShortcuts = {
     DELETE_OBJECT_SINGLE_SHAPE: {
         name: 'Delete object',
         description: 'Delete an active object. Use shift to force delete of locked objects',
-        sequences: ['del', 'shift+del'],
+        sequences: ['del', 'shift+del', 'backspace', 'shift+backspace'],
+        displayedSequences: ['del', 'shift+del'],
         scope: ShortcutScope.SINGLE_SHAPE_ANNOTATION_WORKSPACE,
     },
     HIDE_MASK_SINGLE_SHAPE: {

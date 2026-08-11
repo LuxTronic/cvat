@@ -412,6 +412,12 @@ class ExportRequestId(
 
 
 @attrs.frozen(kw_only=True, slots=False)
+class AutoAnnotateRequestId(RequestId):
+    ACTION_ALLOWED_VALUES: ClassVar[tuple[str]] = ("autoannotate", "gptannotate")
+    QUEUE_SELECTORS: ClassVar[tuple[str]] = ACTION_ALLOWED_VALUES
+
+
+@attrs.frozen(kw_only=True, slots=False)
 class ImportRequestId(
     RequestIdWithOptionalSubresource,  # subresource is optional because import queue works also with task creation jobs
     RequestIdWithOptionalFormat,
