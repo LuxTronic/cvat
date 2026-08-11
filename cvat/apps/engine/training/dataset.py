@@ -1,10 +1,10 @@
 import logging
+import random
+import shutil
 import zipfile
 from pathlib import Path
 
 import yaml
-
-from .model_paths import task_data_dir
 
 log = logging.getLogger(__name__)
 
@@ -92,11 +92,6 @@ def remove_unlabeled_images(data_dir: Path):
             removed += 1
 
     log.info("[DATASET] Removed %d unlabeled images", removed)
-
-
-import random
-import shutil
-from pathlib import Path
 
 
 def split_train_val(

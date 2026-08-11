@@ -805,13 +805,12 @@ def run_yolov7_inference_frame(
     import logging
 
     import requests
-    from django.conf import settings
     from django.db import transaction
     from PIL import Image
 
     from cvat.apps.dataset_manager.task import patch_job_data
     from cvat.apps.engine.media_io.frame_provider import JobFrameProvider
-    from cvat.apps.engine.models import FrameQuality, Job, SourceType
+    from cvat.apps.engine.models import FrameQuality, SourceType
     from cvat.apps.engine.serializers import LabeledDataSerializer
 
     log = logging.getLogger(__name__)
@@ -989,13 +988,12 @@ def run_yolov8cls_inference_frame(
     import logging
 
     import requests
-    from django.conf import settings
     from django.db import transaction
     from PIL import Image
 
     from cvat.apps.dataset_manager.task import patch_job_data
     from cvat.apps.engine.media_io.frame_provider import JobFrameProvider
-    from cvat.apps.engine.models import FrameQuality, Job, SourceType
+    from cvat.apps.engine.models import FrameQuality, SourceType
     from cvat.apps.engine.serializers import LabeledDataSerializer
 
     log = logging.getLogger(__name__)
@@ -1150,13 +1148,12 @@ def run_sam_segmentation_frame(
 
     import numpy as np
     import requests
-    from django.conf import settings
     from django.db import transaction
     from PIL import Image
 
     from cvat.apps.dataset_manager.task import patch_job_data
     from cvat.apps.engine.media_io.frame_provider import JobFrameProvider
-    from cvat.apps.engine.models import FrameQuality, Job, SourceType
+    from cvat.apps.engine.models import FrameQuality, SourceType
     from cvat.apps.engine.serializers import LabeledDataSerializer
 
     log = logging.getLogger(__name__)

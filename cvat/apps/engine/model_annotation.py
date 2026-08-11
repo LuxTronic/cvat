@@ -18,7 +18,6 @@ from rest_framework import serializers, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.response import Response
 
 from cvat.apps.dataset_manager.task import patch_task_data
 from cvat.apps.engine.media_io.frame_provider import TaskFrameProvider

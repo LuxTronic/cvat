@@ -2680,6 +2680,115 @@ paths:
       responses:
         '204':
           description: The annotation has been deleted
+  /api/jobs/{id}/auto-annotate:
+    post:
+      operationId: jobs_create_auto_annotate
+      summary: Generate inference using YOLOv7 service
+      parameters:
+      - in: query
+        name: frame
+        schema:
+          type: integer
+        description: Frame number to process
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this job.
+        required: true
+      - in: query
+        name: model_id
+        schema:
+          type: string
+        description: Auto-annotation model to use; defaults to the task's active model
+      tags:
+      - jobs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JobWriteRequest'
+        required: true
+      security:
+      - tokenAuth: []
+      - accessTokenAuth: []
+      - sessionAuth: []
+        csrfAuth: []
+        csrfHeaderAuth: []
+      - basicAuth: []
+      responses:
+        '200':
+          description: Inference finished and annotations saved
+  /api/jobs/{id}/auto-annotate-models:
+    get:
+      operationId: jobs_retrieve_auto_annotate_models
+      summary: List YOLOv7 auto-annotation models available for this job
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this job.
+        required: true
+      tags:
+      - jobs
+      security:
+      - tokenAuth: []
+      - accessTokenAuth: []
+      - sessionAuth: []
+        csrfAuth: []
+        csrfHeaderAuth: []
+      - basicAuth: []
+      responses:
+        '200':
+          description: Available YOLOv7 models
+  /api/jobs/{id}/auto-classify:
+    post:
+      operationId: jobs_create_auto_classify
+      summary: Generate classification tags using YOLOv8-CLS service
+      parameters:
+      - in: query
+        name: frame
+        schema:
+          type: integer
+        description: Frame number to process
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this job.
+        required: true
+      - in: query
+        name: threshold
+        schema:
+          type: number
+          format: float
+        description: Minimum confidence threshold for predicted classes
+      - in: query
+        name: topk
+        schema:
+          type: integer
+        description: Number of top classes to keep
+      tags:
+      - jobs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JobWriteRequest'
+        required: true
+      security:
+      - tokenAuth: []
+      - accessTokenAuth: []
+      - sessionAuth: []
+        csrfAuth: []
+        csrfHeaderAuth: []
+      - basicAuth: []
+      responses:
+        '200':
+          description: Classification finished and tags saved
   /api/jobs/{id}/data:
     get:
       operationId: jobs_retrieve_data
@@ -2911,6 +3020,52 @@ paths:
           description: 'No media-derived preview is available. The client should render
             a placeholder image. Only returned when the request opts in via `Prefer:
             handling=empty`.'
+  /api/jobs/{id}/sam-segment:
+    post:
+      operationId: jobs_create_sam_segment
+      summary: Generate interactive SAM segmentation mask for a frame
+      parameters:
+      - in: query
+        name: frame
+        schema:
+          type: integer
+        description: Frame number to process
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this job.
+        required: true
+      - in: query
+        name: label_id
+        schema:
+          type: integer
+        description: Optional label id to assign to created mask (defaults to first
+          job label)
+      - in: query
+        name: multimask_output
+        schema:
+          type: boolean
+        description: Ask SAM service for multi-mask output and pick best score
+      tags:
+      - jobs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JobWriteRequest'
+        required: true
+      security:
+      - tokenAuth: []
+      - accessTokenAuth: []
+      - sessionAuth: []
+        csrfAuth: []
+        csrfHeaderAuth: []
+      - basicAuth: []
+      responses:
+        '200':
+          description: Segmentation finished and mask saved
   /api/jobs/{id}/validation_layout:
     get:
       operationId: jobs_retrieve_validation_layout
@@ -3561,6 +3716,34 @@ paths:
       responses:
         '204':
           description: The membership has been deleted
+  /api/model/annotate:
+    post:
+      operationId: model_create_annotate
+      summary: Generate annotations with AI model
+      tags:
+      - model
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModelAnnotateRequest'
+        required: true
+      security:
+      - tokenAuth: []
+      - accessTokenAuth: []
+      - sessionAuth: []
+        csrfAuth: []
+        csrfHeaderAuth: []
+      - basicAuth: []
+      responses:
+        '202':
+          content:
+            application/vnd.cvat+json:
+              schema:
+                $ref: '#/components/schemas/RqId'
+          description: ''
+        '409':
+          description: Request already running
   /api/organizations:
     get:
       operationId: organizations_list
@@ -9178,6 +9361,32 @@ components:
       anyOf:
       - $ref: '#/components/schemas/User'
       - $ref: '#/components/schemas/BasicUser'
+    ModelAnnotateRequest:
+      type: object
+      properties:
+        task_id:
+          type: integer
+          minimum: 1
+        frame_ids:
+          type: array
+          items:
+            type: integer
+            minimum: 0
+        context_frame_ids:
+          type: array
+          items:
+            type: integer
+            minimum: 0
+        prompt:
+          type: string
+          minLength: 1
+          maxLength: 8000
+        options:
+          type: object
+      required:
+      - frame_ids
+      - prompt
+      - task_id
     NullEnum:
       enum:
       - null
