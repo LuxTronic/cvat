@@ -256,7 +256,11 @@ services:
     networks:
       - cvat
 
+  # Opt-in: `docker compose --profile lux-ml up`. Kept out of the default
+  # stack because these need an NVIDIA runtime, and because the Python test
+  # harness builds its stack from this file.
   yolov7:
+    profiles: [lux-ml]
     container_name: yolov7
     build: ./yolov7
     restart: always
@@ -271,7 +275,11 @@ services:
     networks:
       - cvat
 
+  # Opt-in: `docker compose --profile lux-ml up`. Kept out of the default
+  # stack because these need an NVIDIA runtime, and because the Python test
+  # harness builds its stack from this file.
   yolov8-cls:
+    profiles: [lux-ml]
     container_name: yolov8-cls
     build: ./yolov8-cls
     restart: always
@@ -286,7 +294,11 @@ services:
     networks:
       - cvat
 
+  # Opt-in: `docker compose --profile lux-ml up`. Kept out of the default
+  # stack because these need an NVIDIA runtime, and because the Python test
+  # harness builds its stack from this file.
   sam-service:
+    profiles: [lux-ml]
     container_name: sam-service
     build: ./sam-service
     restart: always
