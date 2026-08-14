@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: MIT
 
 import React from 'react';
-import { useSelector } from 'react-redux';
 import Popover from 'antd/lib/popover';
 import Icon from '@ant-design/icons';
 
@@ -11,7 +10,6 @@ import { Canvas } from 'cvat-canvas-wrapper';
 import { PolylineIcon } from 'icons';
 import { ShapeType } from 'cvat-core-wrapper';
 
-import { CombinedState } from 'reducers';
 import CVATTooltip from 'components/common/cvat-tooltip';
 import DrawShapePopoverContainer from 'containers/annotation-page/standard-workspace/controls-side-bar/draw-shape-popover';
 import withVisibilityHandling from './handle-popover-visibility';
@@ -25,8 +23,6 @@ export interface Props {
 const CustomPopover = withVisibilityHandling(Popover, 'draw-polyline');
 function DrawPolylineControl(props: Props): JSX.Element {
     const { canvasInstance, isDrawing, disabled } = props;
-    const { normalizedKeyMap } = useSelector((state: CombinedState) => state.shortcuts);
-    const repeatHint = `${normalizedKeyMap.SWITCH_DRAW_MODE_STANDARD_CONTROLS} repeats last drawing action`;
     const dynamicPopoverProps = isDrawing ? {
         overlayStyle: {
             display: 'none',
@@ -51,10 +47,7 @@ function DrawPolylineControl(props: Props): JSX.Element {
             placement='right'
             content={<DrawShapePopoverContainer shapeType={ShapeType.POLYLINE} />}
         >
-            <CVATTooltip
-                title={`Draw a polyline. ${repeatHint}`}
-                placement='right'
-            >
+            <CVATTooltip title='Draw a polyline' placement='right'>
                 <Icon {...dynamicIconProps} component={PolylineIcon} />
             </CVATTooltip>
         </CustomPopover>
