@@ -6,6 +6,7 @@ import React from 'react';
 
 import { Row, Col } from 'antd/lib/grid';
 import Checkbox, { CheckboxChangeEvent } from 'antd/lib/checkbox';
+import InputNumber from 'antd/lib/input-number';
 import Text from 'antd/lib/typography/Text';
 import Slider from 'antd/lib/slider';
 import Select from 'antd/lib/select';
@@ -13,6 +14,7 @@ import Select from 'antd/lib/select';
 import {
     MAX_ACCURACY,
 } from 'components/annotation-page/standard-workspace/controls-side-bar/approximation-accuracy';
+import { clamp } from 'utils/math';
 
 interface Props {
     autoSave: boolean;

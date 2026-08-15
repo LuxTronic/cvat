@@ -232,7 +232,9 @@ class AudioTopBarContainer extends React.PureComponent<Props> {
     };
 
     private autoSave(): void {
-        const { autoSave, saving, jobInstance, onSaveAnnotation } = this.props;
+        const {
+            autoSave, saving, jobInstance, onSaveAnnotation,
+        } = this.props;
 
         if (autoSave && !saving && jobInstance.annotations.hasUnsavedChanges()) {
             this.autoSaveInProgress = true;
