@@ -65,6 +65,7 @@ export default function AudioTopBarComponent(props: Props): JSX.Element {
         <Row justify='space-between'>
             <AudioLeftGroup
                 saving={saving}
+                hasUnsavedChanges={jobInstance.annotations.hasUnsavedChanges()}
                 lastSavedAt={lastSavedAt}
                 undoAction={undoAction}
                 redoAction={redoAction}

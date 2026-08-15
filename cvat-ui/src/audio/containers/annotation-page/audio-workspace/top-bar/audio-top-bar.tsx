@@ -145,7 +145,7 @@ class AudioTopBarContainer extends React.PureComponent<Props> {
 
     public componentDidMount(): void {
         const { history, jobInstance, setForceExitAnnotationFlag } = this.props;
-        this.autoSaveInterval = window.setInterval(this.autoSave.bind(this), 5 * 1000);
+        this.autoSaveInterval = window.setInterval(this.autoSave.bind(this), this.props.autoSaveInterval);
 
         // eslint-disable-next-line @typescript-eslint/no-this-alias
         const self = this;
@@ -184,7 +184,7 @@ class AudioTopBarContainer extends React.PureComponent<Props> {
 
         if (this.props.autoSaveInterval !== prevProps.autoSaveInterval) {
             if (this.autoSaveInterval) window.clearInterval(this.autoSaveInterval);
-            this.autoSaveInterval = window.setInterval(this.autoSave.bind(this), 5 * 1000);
+            this.autoSaveInterval = window.setInterval(this.autoSave.bind(this), this.props.autoSaveInterval);
         }
     }
 

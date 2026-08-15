@@ -1033,6 +1033,7 @@ export interface PlayerSettingsState {
 
 export interface WorkspaceSettingsState {
     autoSave: boolean;
+    autoSavePreferenceSet: boolean;
     autoSaveInterval: number; // in ms
     focusedObjectPadding: number;
     automaticBordering: boolean;

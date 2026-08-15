@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-import React from 'react';
+import React, { useCallback } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { shallowEqual } from 'utils/redux';
 import Icon from '@ant-design/icons';
@@ -39,12 +39,15 @@ function SaveAnnotationsButton() {
         normKeyMap: state.shortcuts.normalizedKeyMap,
     }), shallowEqual);
 
+    const trySave = useCallback(() => {
+        if (isSaving || !hasUnsavedChanges) return;
+        dispatch(saveAnnotationsAsync());
+    }, [hasUnsavedChanges, isSaving, dispatch]);
+
     const handlers: Record<keyof typeof componentShortcuts, (event?: KeyboardEvent) => void> = {
         SAVE_JOB: (event: KeyboardEvent | undefined) => {
             event?.preventDefault();
-            if (!isSaving && hasUnsavedChanges) {
-                dispatch(saveAnnotationsAsync());
-            }
+            trySave();
         },
     };
 
@@ -55,7 +58,7 @@ function SaveAnnotationsButton() {
                 <Button
                     type='link'
                     disabled={isSaving || !hasUnsavedChanges}
-                    onClick={() => dispatch(saveAnnotationsAsync())}
+                    onClick={trySave}
                     className={isSaving || !hasUnsavedChanges ? 'cvat-annotation-header-save-button cvat-annotation-disabled-header-button' :
                         'cvat-annotation-header-save-button cvat-annotation-header-button'}
                 >

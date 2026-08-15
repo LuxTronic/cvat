@@ -21,6 +21,7 @@ import AudioRemoveAnnotationsConfirm from './audio-remove-annotations-confirm';
 
 interface Props {
     saving: boolean;
+    hasUnsavedChanges: boolean;
     lastSavedAt?: Date;
     undoAction?: string;
     redoAction?: string;
@@ -51,6 +52,7 @@ registerComponentShortcuts(componentShortcuts);
 function AudioLeftGroup(props: Props): JSX.Element {
     const {
         saving,
+        hasUnsavedChanges,
         lastSavedAt,
         keyMap,
         undoAction,
@@ -97,7 +99,7 @@ function AudioLeftGroup(props: Props): JSX.Element {
             <Col className='cvat-annotation-header-left-group'>
                 <AnnotationMenuComponent removeAnnotationsConfirmComponent={AudioRemoveAnnotationsConfirm} />
                 <AudioSaveAnnotationsButton />
-                {savedTime && !saving ? <Text type='secondary'>All changes saved · {savedTime}</Text> : null}
+                {savedTime && !saving && !hasUnsavedChanges ? <Text type='secondary'>All changes saved · {savedTime}</Text> : null}
                 <CVATTooltip overlay={`Undo: ${undoAction} ${undoShortcut}`}>
                     <Button
                         style={{ pointerEvents: undoAction ? 'initial' : 'none', opacity: undoAction ? 1 : 0.5 }}

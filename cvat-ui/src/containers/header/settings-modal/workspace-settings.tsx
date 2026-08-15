@@ -26,6 +26,7 @@ import WorkspaceSettingsComponent from 'components/header/settings-modal/workspa
 
 interface StateToProps {
     autoSave: boolean;
+    autoSaveInterval: number;
     focusedObjectPadding: number;
     showAllInterpolationTracks: boolean;
     showObjectsTextAlways: boolean;
@@ -58,6 +59,7 @@ function mapStateToProps(state: CombinedState): StateToProps {
     const { workspace } = state.settings;
     const {
         autoSave,
+        autoSaveInterval,
         focusedObjectPadding,
         showAllInterpolationTracks,
         showObjectsTextAlways,
@@ -73,6 +75,7 @@ function mapStateToProps(state: CombinedState): StateToProps {
 
     return {
         autoSave,
+        autoSaveInterval,
         focusedObjectPadding,
         showAllInterpolationTracks,
         showObjectsTextAlways,

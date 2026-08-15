@@ -18,6 +18,7 @@ import { clamp } from 'utils/math';
 
 interface Props {
     autoSave: boolean;
+    autoSaveInterval: number;
     focusedObjectPadding: number;
     showAllInterpolationTracks: boolean;
     showObjectsTextAlways: boolean;
@@ -46,6 +47,7 @@ interface Props {
 function WorkspaceSettingsComponent(props: Props): JSX.Element {
     const {
         autoSave,
+        autoSaveInterval,
         focusedObjectPadding,
         showAllInterpolationTracks,
         showObjectsTextAlways,
@@ -75,6 +77,10 @@ function WorkspaceSettingsComponent(props: Props): JSX.Element {
     const maxFocusedObjectPadding = 1000;
     const minControlPointsSize = 2;
     const maxControlPointsSize = 10;
+    const intervalInSeconds = Math.round(autoSaveInterval / 1000);
+    const intervalDescription = intervalInSeconds >= 60 ?
+        `${Math.round(intervalInSeconds / 60)} minute${Math.round(intervalInSeconds / 60) === 1 ? '' : 's'}` :
+        `${intervalInSeconds} second${intervalInSeconds === 1 ? '' : 's'}`;
 
     return (
         <div className='cvat-workspace-settings'>
@@ -91,7 +97,7 @@ function WorkspaceSettingsComponent(props: Props): JSX.Element {
                     </Checkbox>
                 </Col>
                 <Col className='cvat-workspace-settings-auto-save-interval'>
-                    <Text type='secondary'> Auto save checks for changes every 5 seconds </Text>
+                    <Text type='secondary'> Auto save checks for changes every {intervalDescription} </Text>
                 </Col>
             </Row>
             <Row className='cvat-player-setting'>

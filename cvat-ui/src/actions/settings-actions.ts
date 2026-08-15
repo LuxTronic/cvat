@@ -23,7 +23,9 @@ import { shortcutsActions } from './shortcuts-actions';
 // have settings stored, since a stored value always wins over a new default.
 // Settings saved before versioning are treated as version 0.
 //
-//   1 - autoSave defaults to true (previously false)
+//   1 - autoSave defaults to true (previously false). Unversioned settings are
+//       treated as the legacy default and migrated to true; an explicit opt-out
+//       made after this version is tracked by autoSavePreferenceSet.
 const CLIENT_SETTINGS_VERSION = 1;
 
 // Workspace keys that a given migration must not restore from storage, so the
@@ -33,10 +35,10 @@ const MIGRATED_WORKSPACE_KEYS: Record<number, string[]> = {
     1: ['autoSave'],
 };
 
-function workspaceKeysToSkip(storedVersion: number): Set<string> {
+function workspaceKeysToSkip(storedVersion: number, autoSavePreferenceSet: boolean): Set<string> {
     const skip = new Set<string>();
     Object.entries(MIGRATED_WORKSPACE_KEYS).forEach(([version, keys]) => {
-        if (storedVersion < Number(version)) {
+        if (storedVersion < Number(version) && !(version === '1' && autoSavePreferenceSet)) {
             keys.forEach((key) => skip.add(key));
         }
     });
@@ -492,7 +494,10 @@ export function restoreSettingsAsync(): ThunkAction {
         } as Pick<SettingsState, 'player' | 'workspace' | 'imageFilters'>;
 
         const storedVersion = Number(loadedSettings.version) || 0;
-        const skipWorkspaceKeys = workspaceKeysToSkip(storedVersion);
+        const skipWorkspaceKeys = workspaceKeysToSkip(
+            storedVersion,
+            loadedSettings.workspace?.autoSavePreferenceSet === true,
+        );
 
         Object.entries(_.pick(newSettings, ['player', 'workspace'])).forEach(([sectionKey, section]) => {
             Object.keys(section).forEach((key) => {

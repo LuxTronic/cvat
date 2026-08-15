@@ -34,6 +34,7 @@ const defaultState: SettingsState = {
         // Browsers with settings stored before this default changed are migrated
         // once in restoreSettingsAsync; see CLIENT_SETTINGS_VERSION.
         autoSave: true,
+        autoSavePreferenceSet: false,
         autoSaveInterval: 15 * 60 * 1000,
         focusedObjectPadding: 50,
         automaticBordering: false,
@@ -302,6 +303,7 @@ export default (state = defaultState, action: AnyAction): SettingsState => {
                 workspace: {
                     ...state.workspace,
                     autoSave: action.payload.autoSave,
+                    autoSavePreferenceSet: true,
                 },
             };
         }

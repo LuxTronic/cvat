@@ -108,10 +108,23 @@ Cypress.Commands.add('login', (username = Cypress.env('user'), password = Cypres
 Cypress.Commands.add('prepareUserSession', (nextURL = '/tasks') => {
     cy.visit('/auth/login');
     cy.headlessLogin({ nextURL });
+});
+
+Cypress.Commands.add('disableAutoSave', () => {
     cy.openSettings();
     cy.contains('Workspace').click();
     cy.get('.cvat-workspace-settings-auto-save').within(() => {
         cy.get('[type="checkbox"]').uncheck();
+    });
+    cy.closeSettings();
+});
+
+Cypress.Commands.add('prepareUserSessionWithAutoSave', (nextURL = '/tasks') => {
+    cy.prepareUserSession(nextURL);
+    cy.openSettings();
+    cy.contains('Workspace').click();
+    cy.get('.cvat-workspace-settings-auto-save').within(() => {
+        cy.get('[type="checkbox"]').check().should('be.checked');
     });
     cy.closeSettings();
 });
