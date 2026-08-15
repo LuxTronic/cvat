@@ -30,7 +30,9 @@ registerComponentShortcuts(componentShortcuts);
 
 function SaveAnnotationsButton() {
     const dispatch = useDispatch();
-    const { isSaving, hasUnsavedChanges, keyMap, normKeyMap } = useSelector((state: CombinedState) => ({
+    const {
+        isSaving, hasUnsavedChanges, keyMap, normKeyMap,
+    } = useSelector((state: CombinedState) => ({
         isSaving: state.annotation.annotations.saving.uploading,
         hasUnsavedChanges: Boolean(state.annotation.job.instance?.annotations.hasUnsavedChanges()),
         keyMap: state.shortcuts.keyMap,
