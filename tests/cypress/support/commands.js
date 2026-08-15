@@ -124,7 +124,8 @@ Cypress.Commands.add('prepareUserSessionWithAutoSave', (nextURL = '/tasks') => {
     cy.openSettings();
     cy.contains('Workspace').click();
     cy.get('.cvat-workspace-settings-auto-save').within(() => {
-        cy.get('[type="checkbox"]').check().should('be.checked');
+        cy.get('[type="checkbox"]').check();
+        cy.get('[type="checkbox"]').should('be.checked');
     });
     cy.closeSettings();
 });
