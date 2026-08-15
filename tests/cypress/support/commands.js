@@ -108,6 +108,12 @@ Cypress.Commands.add('login', (username = Cypress.env('user'), password = Cypres
 Cypress.Commands.add('prepareUserSession', (nextURL = '/tasks') => {
     cy.visit('/auth/login');
     cy.headlessLogin({ nextURL });
+    cy.openSettings();
+    cy.contains('Workspace').click();
+    cy.get('.cvat-workspace-settings-auto-save').within(() => {
+        cy.get('[type="checkbox"]').uncheck();
+    });
+    cy.closeSettings();
 });
 
 Cypress.Commands.add('logout', () => {

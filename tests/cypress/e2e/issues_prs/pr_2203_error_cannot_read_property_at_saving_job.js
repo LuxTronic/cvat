@@ -21,12 +21,6 @@ context('Check error cannot read property at saving job', () => {
     before(() => {
         cy.prepareUserSession();
         cy.openTaskJob(taskName);
-        cy.openSettings();
-        cy.contains('Workspace').click();
-        cy.get('.cvat-workspace-settings-auto-save').within(() => {
-            cy.get('[type="checkbox"]').uncheck();
-        });
-        cy.closeSettings();
     });
 
     describe(`Testing pr "${prId}"`, () => {
