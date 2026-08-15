@@ -17,6 +17,32 @@ import GammaCorrection, { GammaFilterOptions } from 'utils/fabric-wrapper/gamma-
 import { resolveConflicts } from 'utils/conflict-detector';
 import { shortcutsActions } from './shortcuts-actions';
 
+// Version of the persisted `clientSettings` blob.
+//
+// Bumped when a default changes in a way that must reach browsers which already
+// have settings stored, since a stored value always wins over a new default.
+// Settings saved before versioning are treated as version 0.
+//
+//   1 - autoSave defaults to true (previously false)
+const CLIENT_SETTINGS_VERSION = 1;
+
+// Workspace keys that a given migration must not restore from storage, so the
+// new default survives the restore for exactly one load. After that the blob is
+// rewritten with the current version and the annotator's own choice is honoured.
+const MIGRATED_WORKSPACE_KEYS: Record<number, string[]> = {
+    1: ['autoSave'],
+};
+
+function workspaceKeysToSkip(storedVersion: number): Set<string> {
+    const skip = new Set<string>();
+    Object.entries(MIGRATED_WORKSPACE_KEYS).forEach(([version, keys]) => {
+        if (storedVersion < Number(version)) {
+            keys.forEach((key) => skip.add(key));
+        }
+    });
+    return skip;
+}
+
 export enum SettingsActionTypes {
     SWITCH_ROTATE_ALL = 'SWITCH_ROTATE_ALL',
     SWITCH_GRID = 'SWITCH_GRID',
@@ -465,8 +491,18 @@ export function restoreSettingsAsync(): ThunkAction {
             imageFilters: [],
         } as Pick<SettingsState, 'player' | 'workspace' | 'imageFilters'>;
 
+        const storedVersion = Number(loadedSettings.version) || 0;
+        const skipWorkspaceKeys = workspaceKeysToSkip(storedVersion);
+
         Object.entries(_.pick(newSettings, ['player', 'workspace'])).forEach(([sectionKey, section]) => {
             Object.keys(section).forEach((key) => {
+                // A migrated key is left at its new default for this load rather than
+                // restored. Skipping it here matters: the defineProperty below writes a
+                // non-writable property, so the value cannot be corrected afterwards.
+                if (sectionKey === 'workspace' && skipWorkspaceKeys.has(key)) {
+                    return;
+                }
+
                 const setValue = loadedSettings[sectionKey]?.[key];
                 if (setValue !== undefined) {
                     Object.defineProperty(newSettings[sectionKey as 'player' | 'workspace'], key, { value: setValue });
@@ -506,6 +542,10 @@ export function restoreSettingsAsync(): ThunkAction {
 export function updateCachedSettings(settings: CombinedState['settings'], shortcuts: CombinedState['shortcuts']): void {
     const supportedImageFilters = [ImageFilterAlias.GAMMA_CORRECTION];
     const settingsForSaving = {
+        // Stamping the version here is what makes a migration one-shot: this runs
+        // immediately after restoreSettingsAsync on load, so the next load sees the
+        // current version and stops overriding the migrated key.
+        version: CLIENT_SETTINGS_VERSION,
         player: settings.player,
         workspace: settings.workspace,
         shortcuts: {

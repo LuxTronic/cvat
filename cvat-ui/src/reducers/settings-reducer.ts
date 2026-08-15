@@ -29,7 +29,11 @@ const defaultState: SettingsState = {
         },
     },
     workspace: {
-        autoSave: false,
+        // Enabled by default so unsaved annotation work is bounded by the
+        // interval below rather than by whenever the annotator last pressed Save.
+        // Browsers with settings stored before this default changed are migrated
+        // once in restoreSettingsAsync; see CLIENT_SETTINGS_VERSION.
+        autoSave: true,
         autoSaveInterval: 15 * 60 * 1000,
         focusedObjectPadding: 50,
         automaticBordering: false,
