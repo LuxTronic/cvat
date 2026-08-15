@@ -265,6 +265,9 @@ class AnnotationTopBarContainer extends React.PureComponent<Props> {
     private autoSaveInterval: number | undefined;
     private isWaitingForPlayDelay: boolean;
     private unblock: any;
+    private autoSaveInProgress = false;
+
+    public state: { lastSavedAt?: Date } = {};
 
     constructor(props: Props) {
         super(props);
@@ -273,10 +276,8 @@ class AnnotationTopBarContainer extends React.PureComponent<Props> {
     }
 
     public componentDidMount(): void {
-        const {
-            autoSaveInterval, history, jobInstance, setForceExitAnnotationFlag,
-        } = this.props;
-        this.autoSaveInterval = window.setInterval(this.autoSave.bind(this), autoSaveInterval);
+        const { history, jobInstance, setForceExitAnnotationFlag } = this.props;
+        this.autoSaveInterval = window.setInterval(this.autoSave.bind(this), 5 * 1000);
 
         // eslint-disable-next-line @typescript-eslint/no-this-alias
         const self = this;
@@ -304,11 +305,18 @@ class AnnotationTopBarContainer extends React.PureComponent<Props> {
     }
 
     public componentDidUpdate(prevProps: Props): void {
-        const { autoSaveInterval } = this.props;
+        if (this.props.saving !== prevProps.saving && !this.props.saving) {
+            if (this.autoSaveInProgress) {
+                this.autoSaveInProgress = false;
+            }
+            if (!this.props.jobInstance.annotations.hasUnsavedChanges()) {
+                this.setState({ lastSavedAt: new Date() });
+            }
+        }
 
-        if (autoSaveInterval !== prevProps.autoSaveInterval) {
+        if (this.props.autoSaveInterval !== prevProps.autoSaveInterval) {
             if (this.autoSaveInterval) window.clearInterval(this.autoSaveInterval);
-            this.autoSaveInterval = window.setInterval(this.autoSave.bind(this), autoSaveInterval);
+            this.autoSaveInterval = window.setInterval(this.autoSave.bind(this), 5 * 1000);
         }
         this.handlePlayIfNecessary();
     }
@@ -683,9 +691,10 @@ class AnnotationTopBarContainer extends React.PureComponent<Props> {
     };
 
     private autoSave(): void {
-        const { autoSave, saving, onSaveAnnotation } = this.props;
+        const { autoSave, saving, jobInstance, onSaveAnnotation } = this.props;
 
-        if (autoSave && !saving) {
+        if (autoSave && !saving && jobInstance.annotations.hasUnsavedChanges()) {
+            this.autoSaveInProgress = true;
             onSaveAnnotation();
         }
     }
@@ -724,6 +733,7 @@ class AnnotationTopBarContainer extends React.PureComponent<Props> {
             switchShowSearchPallet,
             showSearchFrameByName,
         } = this.props;
+        const { lastSavedAt } = this.state;
 
         return (
             <AnnotationTopBarComponent
@@ -756,7 +766,8 @@ class AnnotationTopBarContainer extends React.PureComponent<Props> {
                 playing={playing}
                 chapters={chapters}
                 hoveredChapter={hoveredChapter}
-                saving={saving}
+                saving={saving && !this.autoSaveInProgress}
+                lastSavedAt={lastSavedAt}
                 ranges={ranges}
                 startFrame={startFrame}
                 stopFrame={stopFrame}

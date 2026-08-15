@@ -6,7 +6,6 @@ import React from 'react';
 
 import { Row, Col } from 'antd/lib/grid';
 import Checkbox, { CheckboxChangeEvent } from 'antd/lib/checkbox';
-import InputNumber from 'antd/lib/input-number';
 import Text from 'antd/lib/typography/Text';
 import Slider from 'antd/lib/slider';
 import Select from 'antd/lib/select';
@@ -14,11 +13,9 @@ import Select from 'antd/lib/select';
 import {
     MAX_ACCURACY,
 } from 'components/annotation-page/standard-workspace/controls-side-bar/approximation-accuracy';
-import { clamp } from 'utils/math';
 
 interface Props {
     autoSave: boolean;
-    autoSaveInterval: number;
     focusedObjectPadding: number;
     showAllInterpolationTracks: boolean;
     showObjectsTextAlways: boolean;
@@ -31,7 +28,6 @@ interface Props {
     textContent: string;
     showTagsOnFrame: boolean;
     onSwitchAutoSave(enabled: boolean): void;
-    onChangeAutoSaveInterval(interval: number): void;
     onChangeFocusedObjectPadding(padding: number): void;
     onChangeDefaultApproxPolyAccuracy(approxPolyAccuracy: number): void;
     onSwitchShowingInterpolatedTracks(enabled: boolean): void;
@@ -48,7 +44,6 @@ interface Props {
 function WorkspaceSettingsComponent(props: Props): JSX.Element {
     const {
         autoSave,
-        autoSaveInterval,
         focusedObjectPadding,
         showAllInterpolationTracks,
         showObjectsTextAlways,
@@ -61,7 +56,6 @@ function WorkspaceSettingsComponent(props: Props): JSX.Element {
         textContent,
         showTagsOnFrame,
         onSwitchAutoSave,
-        onChangeAutoSaveInterval,
         onChangeFocusedObjectPadding,
         onSwitchShowingInterpolatedTracks,
         onSwitchShowingObjectsTextAlways,
@@ -75,8 +69,6 @@ function WorkspaceSettingsComponent(props: Props): JSX.Element {
         onSwitchShowingTagsOnFrame,
     } = props;
 
-    const minAutoSaveInterval = 1;
-    const maxAutoSaveInterval = 60;
     const minFocusedObjectPadding = 0;
     const maxFocusedObjectPadding = 1000;
     const minControlPointsSize = 2;
@@ -97,22 +89,7 @@ function WorkspaceSettingsComponent(props: Props): JSX.Element {
                     </Checkbox>
                 </Col>
                 <Col className='cvat-workspace-settings-auto-save-interval'>
-                    <Text type='secondary'> Auto save every </Text>
-                    <InputNumber
-                        size='small'
-                        min={minAutoSaveInterval}
-                        max={maxAutoSaveInterval}
-                        step={1}
-                        value={Math.round(autoSaveInterval / (60 * 1000))}
-                        onChange={(value: number | undefined | string): void => {
-                            if (typeof value !== 'undefined') {
-                                onChangeAutoSaveInterval(
-                                    Math.floor(clamp(+value, minAutoSaveInterval, maxAutoSaveInterval)) * 60 * 1000,
-                                );
-                            }
-                        }}
-                    />
-                    <Text type='secondary'> minutes </Text>
+                    <Text type='secondary'> Auto save checks for changes every 5 seconds </Text>
                 </Col>
             </Row>
             <Row className='cvat-player-setting'>

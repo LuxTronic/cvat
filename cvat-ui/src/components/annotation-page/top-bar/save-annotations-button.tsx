@@ -30,8 +30,9 @@ registerComponentShortcuts(componentShortcuts);
 
 function SaveAnnotationsButton() {
     const dispatch = useDispatch();
-    const { isSaving, keyMap, normKeyMap } = useSelector((state: CombinedState) => ({
+    const { isSaving, hasUnsavedChanges, keyMap, normKeyMap } = useSelector((state: CombinedState) => ({
         isSaving: state.annotation.annotations.saving.uploading,
+        hasUnsavedChanges: Boolean(state.annotation.job.instance?.annotations.hasUnsavedChanges()),
         keyMap: state.shortcuts.keyMap,
         normKeyMap: state.shortcuts.normalizedKeyMap,
     }), shallowEqual);
@@ -39,7 +40,7 @@ function SaveAnnotationsButton() {
     const handlers: Record<keyof typeof componentShortcuts, (event?: KeyboardEvent) => void> = {
         SAVE_JOB: (event: KeyboardEvent | undefined) => {
             event?.preventDefault();
-            if (!isSaving) {
+            if (!isSaving && hasUnsavedChanges) {
                 dispatch(saveAnnotationsAsync());
             }
         },
@@ -51,8 +52,9 @@ function SaveAnnotationsButton() {
             <CVATTooltip overlay={`Save current changes ${normKeyMap.SAVE_JOB}`}>
                 <Button
                     type='link'
-                    onClick={isSaving ? undefined : () => dispatch(saveAnnotationsAsync())}
-                    className={isSaving ? 'cvat-annotation-header-save-button cvat-annotation-disabled-header-button' :
+                    disabled={isSaving || !hasUnsavedChanges}
+                    onClick={() => dispatch(saveAnnotationsAsync())}
+                    className={isSaving || !hasUnsavedChanges ? 'cvat-annotation-header-save-button cvat-annotation-disabled-header-button' :
                         'cvat-annotation-header-save-button cvat-annotation-header-button'}
                 >
                     <Icon component={SaveIcon} />

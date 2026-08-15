@@ -23,6 +23,7 @@ import SaveAnnotationsButton from './save-annotations-button';
 
 interface Props {
     saving: boolean;
+    lastSavedAt?: Date;
     undoAction?: string;
     redoAction?: string;
     undoShortcut: string;
@@ -64,6 +65,7 @@ registerComponentShortcuts(componentShortcuts);
 function LeftGroup(props: Props): JSX.Element {
     const {
         saving,
+        lastSavedAt,
         keyMap,
         undoAction,
         redoAction,
@@ -80,6 +82,8 @@ function LeftGroup(props: Props): JSX.Element {
     } = props;
 
     const includesDoneButton = finishDrawAvailable(activeControl);
+    const savedTime = lastSavedAt ?
+        `${String(lastSavedAt.getHours()).padStart(2, '0')}:${String(lastSavedAt.getMinutes()).padStart(2, '0')}` : null;
 
     const includesToolsBlockerButton =
         [ActiveControl.OPENCV_TOOLS, ActiveControl.AI_TOOLS].includes(activeControl) && toolsBlockerState.buttonVisible;
@@ -121,6 +125,7 @@ function LeftGroup(props: Props): JSX.Element {
             <Col className='cvat-annotation-header-left-group'>
                 <AnnotationMenuComponent />
                 <SaveAnnotationsButton />
+                {savedTime && !saving ? <Text type='secondary'>All changes saved · {savedTime}</Text> : null}
                 <CVATTooltip overlay={`Undo: ${undoAction} ${undoShortcut}`}>
                     <Button
                         style={{ pointerEvents: undoAction ? 'initial' : 'none', opacity: undoAction ? 1 : 0.5 }}

@@ -17,6 +17,7 @@ import AudioRightGroup from './audio-right-group';
 interface Props {
     playing: boolean;
     saving: boolean;
+    lastSavedAt?: Date;
     undoAction?: string;
     redoAction?: string;
     workspace: Workspace;
@@ -39,6 +40,7 @@ interface Props {
 export default function AudioTopBarComponent(props: Props): JSX.Element {
     const {
         saving,
+        lastSavedAt,
         undoAction,
         redoAction,
         playing,
@@ -63,6 +65,7 @@ export default function AudioTopBarComponent(props: Props): JSX.Element {
         <Row justify='space-between'>
             <AudioLeftGroup
                 saving={saving}
+                lastSavedAt={lastSavedAt}
                 undoAction={undoAction}
                 redoAction={redoAction}
                 undoShortcut={undoShortcut}

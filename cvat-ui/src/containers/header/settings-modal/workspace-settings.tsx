@@ -7,7 +7,6 @@ import { connect } from 'react-redux';
 
 import {
     switchAutoSave,
-    changeAutoSaveInterval,
     changeFocusedObjectPadding,
     switchShowingInterpolatedTracks,
     switchShowingObjectsTextAlways,
@@ -27,7 +26,6 @@ import WorkspaceSettingsComponent from 'components/header/settings-modal/workspa
 
 interface StateToProps {
     autoSave: boolean;
-    autoSaveInterval: number;
     focusedObjectPadding: number;
     showAllInterpolationTracks: boolean;
     showObjectsTextAlways: boolean;
@@ -43,7 +41,6 @@ interface StateToProps {
 
 interface DispatchToProps {
     onSwitchAutoSave(enabled: boolean): void;
-    onChangeAutoSaveInterval(interval: number): void;
     onChangeFocusedObjectPadding(margin: number): void;
     onSwitchShowingInterpolatedTracks(enabled: boolean): void;
     onSwitchShowingObjectsTextAlways(enabled: boolean): void;
@@ -61,7 +58,6 @@ function mapStateToProps(state: CombinedState): StateToProps {
     const { workspace } = state.settings;
     const {
         autoSave,
-        autoSaveInterval,
         focusedObjectPadding,
         showAllInterpolationTracks,
         showObjectsTextAlways,
@@ -77,7 +73,6 @@ function mapStateToProps(state: CombinedState): StateToProps {
 
     return {
         autoSave,
-        autoSaveInterval,
         focusedObjectPadding,
         showAllInterpolationTracks,
         showObjectsTextAlways,
@@ -94,7 +89,6 @@ function mapStateToProps(state: CombinedState): StateToProps {
 
 const mapDispatchToProps: DispatchToProps = {
     onSwitchAutoSave: switchAutoSave,
-    onChangeAutoSaveInterval: changeAutoSaveInterval,
     onChangeFocusedObjectPadding: changeFocusedObjectPadding,
     onSwitchShowingInterpolatedTracks: switchShowingInterpolatedTracks,
     onSwitchShowingObjectsTextAlways: switchShowingObjectsTextAlways,

@@ -20,6 +20,7 @@ import RightGroup from './right-group';
 interface Props {
     playing: boolean;
     saving: boolean;
+    lastSavedAt?: Date;
     chapters: Chapter[];
     hoveredChapter: number | null;
     frameNumber: number;
@@ -84,6 +85,7 @@ interface Props {
 export default function AnnotationTopBarComponent(props: Props): JSX.Element {
     const {
         saving,
+        lastSavedAt,
         undoAction,
         redoAction,
         playing,
@@ -210,6 +212,7 @@ export default function AnnotationTopBarComponent(props: Props): JSX.Element {
         <Row justify='space-between'>
             <LeftGroup
                 saving={saving}
+                lastSavedAt={lastSavedAt}
                 undoAction={undoAction}
                 redoAction={redoAction}
                 undoShortcut={undoShortcut}
