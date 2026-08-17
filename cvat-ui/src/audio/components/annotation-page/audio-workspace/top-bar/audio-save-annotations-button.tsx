@@ -30,19 +30,18 @@ registerComponentShortcuts(componentShortcuts);
 
 function AudioSaveAnnotationsButton(): JSX.Element {
     const dispatch = useDispatch();
-    const {
-        isSaving, hasUnsavedChanges, keyMap, normKeyMap,
-    } = useSelector((state: CombinedState) => ({
+    const { isSaving, keyMap, normKeyMap } = useSelector((state: CombinedState) => ({
         isSaving: state.annotation.annotations.saving.uploading,
-        hasUnsavedChanges: Boolean(state.annotation.job.instance?.annotations.hasUnsavedChanges()),
         keyMap: state.shortcuts.keyMap,
         normKeyMap: state.shortcuts.normalizedKeyMap,
     }), shallowEqual);
 
+    // See the desktop save button: manual save also flushes frame meta and the NEW -> IN_PROGRESS
+    // transition, so it must not be gated on the annotation collection being dirty.
     const trySave = useCallback(() => {
-        if (isSaving || !hasUnsavedChanges) return;
+        if (isSaving) return;
         dispatch(saveAnnotationsAsync());
-    }, [hasUnsavedChanges, isSaving, dispatch]);
+    }, [isSaving, dispatch]);
 
     const handlers: Record<keyof typeof componentShortcuts, (event?: KeyboardEvent) => void> = {
         SAVE_JOB: (event: KeyboardEvent | undefined) => {
@@ -57,9 +56,8 @@ function AudioSaveAnnotationsButton(): JSX.Element {
             <CVATTooltip overlay={`Save current changes ${normKeyMap.SAVE_JOB ?? ''}`}>
                 <Button
                     type='link'
-                    disabled={isSaving || !hasUnsavedChanges}
                     onClick={trySave}
-                    className={isSaving || !hasUnsavedChanges ? 'cvat-annotation-header-save-button cvat-annotation-disabled-header-button' :
+                    className={isSaving ? 'cvat-annotation-header-save-button cvat-annotation-disabled-header-button' :
                         'cvat-annotation-header-save-button cvat-annotation-header-button'}
                 >
                     <Icon component={SaveIcon} />
