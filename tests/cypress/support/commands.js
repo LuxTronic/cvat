@@ -119,17 +119,6 @@ Cypress.Commands.add('disableAutoSave', () => {
     cy.closeSettings();
 });
 
-Cypress.Commands.add('prepareUserSessionWithAutoSave', (nextURL = '/tasks') => {
-    cy.prepareUserSession(nextURL);
-    cy.openSettings();
-    cy.contains('Workspace').click();
-    cy.get('.cvat-workspace-settings-auto-save').within(() => {
-        cy.get('[type="checkbox"]').check();
-        cy.get('[type="checkbox"]').should('be.checked');
-    });
-    cy.closeSettings();
-});
-
 Cypress.Commands.add('logout', () => {
     cy.get('.cvat-header-menu-user-dropdown-user').click();
     cy.get('span[aria-label="logout"]').click();
