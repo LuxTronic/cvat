@@ -26,13 +26,17 @@ import { shortcutsActions } from './shortcuts-actions';
 //   1 - autoSave defaults to true (previously false). Unversioned settings are
 //       treated as the legacy default and migrated to true; an explicit opt-out
 //       made after this version is tracked by autoSavePreferenceSet.
-const CLIENT_SETTINGS_VERSION = 1;
+//   2 - autoSaveInterval is no longer configurable. The control that used to set
+//       it (1-60 minutes) is gone, so a stored value could never be seen or
+//       changed again; browsers carrying one are migrated to the fixed default.
+const CLIENT_SETTINGS_VERSION = 2;
 
 // Workspace keys that a given migration must not restore from storage, so the
 // new default survives the restore for exactly one load. After that the blob is
 // rewritten with the current version and the annotator's own choice is honoured.
 const MIGRATED_WORKSPACE_KEYS: Record<number, string[]> = {
     1: ['autoSave'],
+    2: ['autoSaveInterval'],
 };
 
 function workspaceKeysToSkip(storedVersion: number, autoSavePreferenceSet: boolean): Set<string> {
@@ -70,7 +74,6 @@ export enum SettingsActionTypes {
     CHANGE_CONTRAST_LEVEL = 'CHANGE_CONTRAST_LEVEL',
     CHANGE_SATURATION_LEVEL = 'CHANGE_SATURATION_LEVEL',
     SWITCH_AUTO_SAVE = 'SWITCH_AUTO_SAVE',
-    CHANGE_AUTO_SAVE_INTERVAL = 'CHANGE_AUTO_SAVE_INTERVAL',
     CHANGE_FOCUSED_OBJECT_PADDING = 'CHANGE_FOCUSED_OBJECT_PADDING',
     CHANGE_DEFAULT_APPROX_POLY_THRESHOLD = 'CHANGE_DEFAULT_APPROX_POLY_THRESHOLD',
     SWITCH_AUTOMATIC_BORDERING = 'SWITCH_AUTOMATIC_BORDERING',
@@ -313,15 +316,6 @@ export function switchAutoSave(autoSave: boolean): AnyAction {
         type: SettingsActionTypes.SWITCH_AUTO_SAVE,
         payload: {
             autoSave,
-        },
-    };
-}
-
-export function changeAutoSaveInterval(autoSaveInterval: number): AnyAction {
-    return {
-        type: SettingsActionTypes.CHANGE_AUTO_SAVE_INTERVAL,
-        payload: {
-            autoSaveInterval,
         },
     };
 }

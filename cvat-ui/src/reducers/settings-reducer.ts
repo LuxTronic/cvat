@@ -307,15 +307,6 @@ export default (state = defaultState, action: AnyAction): SettingsState => {
                 },
             };
         }
-        case SettingsActionTypes.CHANGE_AUTO_SAVE_INTERVAL: {
-            return {
-                ...state,
-                workspace: {
-                    ...state.workspace,
-                    autoSaveInterval: action.payload.autoSaveInterval,
-                },
-            };
-        }
         case SettingsActionTypes.CHANGE_FOCUSED_OBJECT_PADDING: {
             return {
                 ...state,
