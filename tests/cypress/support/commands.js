@@ -791,6 +791,12 @@ Cypress.Commands.add('createPolygon', (createPolygonParams, autoborderParams = n
 });
 
 Cypress.Commands.add('clickUserMenuItem', (itemName, verify) => {
+    // Same shape as openOrganizationsMenu: the header re-renders while the user and the
+    // organization list load, so a click captured against the earlier render is dropped and
+    // the menu never opens. Settling first and asserting in a separate command makes cy.get
+    // re-query immediately before the click. Most visible right after a fresh page load.
+    cy.get('.cvat-spinner').should('not.exist');
+    cy.get('.cvat-header-menu-user-dropdown').should('be.visible');
     cy.get('.cvat-header-menu-user-dropdown').click();
     cy.get('.cvat-header-menu')
         .should('exist')
