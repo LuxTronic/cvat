@@ -280,6 +280,11 @@ function buildDuplicatedAPI(prototype): void {
                     );
                     return result;
                 },
+                // Sync, like annotations.hasUnsavedChanges: callers render on it.
+                hasUnsavedChanges() {
+                    const result = prototype.frames.hasUnsavedChanges.implementation.call(this);
+                    return result;
+                },
                 async cachedChunks() {
                     const result = await PluginRegistry.apiWrapper.call(this, prototype.frames.cachedChunks);
                     return result;
@@ -479,6 +484,7 @@ export class Session {
         delete: (frame: number) => Promise<void>;
         restore: (frame: number) => Promise<void>;
         save: () => Promise<FramesMetaData[]>;
+        hasUnsavedChanges: () => boolean;
         cachedChunks: () => Promise<number[]>;
         frameNumbers: () => Promise<number[]>;
         preview: () => Promise<string>;
@@ -550,6 +556,7 @@ export class Session {
             delete: Object.getPrototypeOf(this).frames.delete.bind(this),
             restore: Object.getPrototypeOf(this).frames.restore.bind(this),
             save: Object.getPrototypeOf(this).frames.save.bind(this),
+            hasUnsavedChanges: Object.getPrototypeOf(this).frames.hasUnsavedChanges.bind(this),
             cachedChunks: Object.getPrototypeOf(this).frames.cachedChunks.bind(this),
             frameNumbers: Object.getPrototypeOf(this).frames.frameNumbers.bind(this),
             preview: Object.getPrototypeOf(this).frames.preview.bind(this),

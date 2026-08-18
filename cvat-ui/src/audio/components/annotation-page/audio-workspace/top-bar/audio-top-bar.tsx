@@ -10,6 +10,8 @@ import { Job } from 'cvat-core-wrapper';
 import { KeyMap } from 'utils/mousetrap-react';
 import { AudioSeekIntent } from 'actions/audio-actions';
 
+import hasUnsavedChanges from 'utils/unsaved-changes';
+
 import AudioLeftGroup from './audio-left-group';
 import AudioPlayerNavigation from './audio-player-navigation';
 import AudioRightGroup from './audio-right-group';
@@ -65,7 +67,7 @@ export default function AudioTopBarComponent(props: Props): JSX.Element {
         <Row justify='space-between'>
             <AudioLeftGroup
                 saving={saving}
-                hasUnsavedChanges={jobInstance.annotations.hasUnsavedChanges()}
+                hasUnsavedChanges={hasUnsavedChanges(jobInstance)}
                 lastSavedAt={lastSavedAt}
                 undoAction={undoAction}
                 redoAction={redoAction}

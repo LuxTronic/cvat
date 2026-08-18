@@ -12,6 +12,7 @@ import {
 import { Job } from 'cvat-core-wrapper';
 import { KeyMap } from 'utils/mousetrap-react';
 import { Chapter } from 'cvat-core/src/frames';
+import hasUnsavedChanges from 'utils/unsaved-changes';
 import LeftGroup from './left-group';
 import PlayerButtons from './player-buttons';
 import PlayerNavigation from './player-navigation';
@@ -212,7 +213,7 @@ export default function AnnotationTopBarComponent(props: Props): JSX.Element {
         <Row justify='space-between'>
             <LeftGroup
                 saving={saving}
-                hasUnsavedChanges={jobInstance.annotations.hasUnsavedChanges()}
+                hasUnsavedChanges={hasUnsavedChanges(jobInstance)}
                 lastSavedAt={lastSavedAt}
                 undoAction={undoAction}
                 redoAction={redoAction}

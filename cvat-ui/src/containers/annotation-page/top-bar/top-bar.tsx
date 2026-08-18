@@ -42,6 +42,7 @@ import { writeLatestFrame } from 'utils/remember-latest-frame';
 import { finishDraw } from 'utils/drawing';
 import { toClipboard } from 'utils/to-clipboard';
 import { Chapter } from 'cvat-core/src/frames';
+import hasUnsavedChanges from 'utils/unsaved-changes';
 
 interface StateToProps {
     chapters: Chapter[];
@@ -287,7 +288,7 @@ class AnnotationTopBarContainer extends React.PureComponent<Props> {
             writeLatestFrame(jobInstance.id, frameNumber);
 
             if (
-                jobInstance.annotations.hasUnsavedChanges() &&
+                hasUnsavedChanges(jobInstance) &&
                 location.pathname !== `/tasks/${taskID}/jobs/${jobID}` &&
                 !forceExit
             ) {
@@ -309,7 +310,7 @@ class AnnotationTopBarContainer extends React.PureComponent<Props> {
             if (this.autoSaveInProgress) {
                 this.autoSaveInProgress = false;
             }
-            if (!this.props.jobInstance.annotations.hasUnsavedChanges()) {
+            if (!hasUnsavedChanges(this.props.jobInstance)) {
                 this.setState({ lastSavedAt: new Date() });
             }
         }
@@ -676,7 +677,7 @@ class AnnotationTopBarContainer extends React.PureComponent<Props> {
         const { frameNumber } = this.props;
 
         writeLatestFrame(jobInstance.id, frameNumber);
-        if (jobInstance.annotations.hasUnsavedChanges() && !forceExit) {
+        if (hasUnsavedChanges(jobInstance) && !forceExit) {
             const confirmationMessage = 'You have unsaved changes, please confirm leaving this page.';
 
             // eslint-disable-next-line no-param-reassign
@@ -695,7 +696,7 @@ class AnnotationTopBarContainer extends React.PureComponent<Props> {
             autoSave, saving, jobInstance, onSaveAnnotation,
         } = this.props;
 
-        if (autoSave && !saving && jobInstance.annotations.hasUnsavedChanges()) {
+        if (autoSave && !saving && hasUnsavedChanges(jobInstance)) {
             this.autoSaveInProgress = true;
             onSaveAnnotation();
         }

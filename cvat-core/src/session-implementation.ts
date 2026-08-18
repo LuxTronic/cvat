@@ -24,6 +24,7 @@ import {
     findFrame,
     getContextImage,
     patchMeta,
+    jobFramesMetaHasUnsavedChanges,
     resolvePreviewResponse,
 } from './frames';
 import Issue from './issue';
@@ -251,6 +252,14 @@ export function implementJob(Job: typeof JobClass): typeof JobClass {
             this: JobClass,
         ): ReturnType<typeof JobClass.prototype.frames.save> {
             return patchMeta(this.id).then((meta) => [meta]);
+        },
+    });
+
+    Object.defineProperty(Job.prototype.frames.hasUnsavedChanges, 'implementation', {
+        value: function hasUnsavedFramesImplementation(
+            this: JobClass,
+        ): ReturnType<typeof JobClass.prototype.frames.hasUnsavedChanges> {
+            return jobFramesMetaHasUnsavedChanges(this.id);
         },
     });
 
@@ -1055,6 +1064,15 @@ export function implementTask(Task: typeof TaskClass): typeof TaskClass {
             this: TaskClass,
         ): ReturnType<typeof TaskClass.prototype.frames.save> {
             return Promise.all(this.jobs.map((job) => patchMeta(job.id)));
+        },
+    });
+
+    Object.defineProperty(Task.prototype.frames.hasUnsavedChanges, 'implementation', {
+        value: function hasUnsavedFramesImplementation(
+            this: TaskClass,
+        ): ReturnType<typeof TaskClass.prototype.frames.hasUnsavedChanges> {
+            // Mirrors frames.save above, which patches the meta of every job in the task.
+            return this.jobs.some((job) => jobFramesMetaHasUnsavedChanges(job.id));
         },
     });
 
