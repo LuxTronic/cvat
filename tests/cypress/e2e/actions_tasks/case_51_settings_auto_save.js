@@ -10,24 +10,23 @@ import { taskName } from '../../support/const';
 context('Settings. "Auto save" option.', () => {
     const caseId = '51';
 
-    // Rewrites the persisted clientSettings blob and reloads, so restoreSettingsAsync runs
-    // against it the way it would in an annotator's browser.
+    // Seeds the persisted clientSettings blob through onBeforeLoad, so restoreSettingsAsync
+    // reads it on boot the way it would in an annotator's browser. Seeding the live page and
+    // reloading instead would race the running app, which rewrites clientSettings whenever
+    // settings change, and would inherit whatever the previous test left behind.
     function seedStoredSettings(workspace, version) {
-        // log: false and the explicit return keep the window out of the command log and off
-        // the chain. Yielding it makes the Allure reporter try to serialize the whole window,
-        // which fails the test with "RangeError: Invalid string length" from JSON.stringify.
-        cy.window({ log: false }).then((win) => {
-            const stored = JSON.parse(win.localStorage.getItem('clientSettings') || '{}');
-            const next = { ...stored, workspace: { ...(stored.workspace || {}), ...workspace } };
-            if (version === null) {
-                delete next.version;
-            } else {
-                next.version = version;
-            }
-            win.localStorage.setItem('clientSettings', JSON.stringify(next));
-            return null;
+        const stored = { workspace };
+        if (version !== null) {
+            stored.version = version;
+        }
+
+        cy.url().then((url) => {
+            cy.visit(url, {
+                onBeforeLoad(win) {
+                    win.localStorage.setItem('clientSettings', JSON.stringify(stored));
+                },
+            });
         });
-        cy.reload();
         cy.get('.cvat-canvas-container').should('exist').and('be.visible');
     }
 
