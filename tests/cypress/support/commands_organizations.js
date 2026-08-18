@@ -8,8 +8,14 @@
 import { convertClasses } from './utils';
 
 function openOrganizationsMenu() {
-    cy.get('.cvat-header-menu-user-dropdown')
-        .should('exist').and('be.visible').click();
+    // The header re-renders as the user and the organization list arrive, which detaches
+    // the dropdown from under a click queued against the earlier render and fails with
+    // "the page updated while this command was executing". Waiting for the page to settle
+    // and asserting in a separate command makes cy.get re-query immediately before the
+    // click, which is Cypress's own remedy for a detached subject.
+    cy.get('.cvat-spinner').should('not.exist');
+    cy.get('.cvat-header-menu-user-dropdown').should('exist').and('be.visible');
+    cy.get('.cvat-header-menu-user-dropdown').click();
     // eslint-disable-next-line cypress/no-unnecessary-waiting
     cy.wait(500); // animation
     cy.get('.cvat-header-menu')
