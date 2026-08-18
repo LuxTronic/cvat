@@ -30,10 +30,18 @@ context('Settings. "Auto save" option.', () => {
         cy.get('.cvat-canvas-container').should('exist').and('be.visible');
     }
 
-    function autoSaveCheckbox() {
-        cy.openSettings();
-        cy.contains('Workspace').click();
-        return cy.get('.cvat-workspace-settings-auto-save').find('[type="checkbox"]');
+    // Read back from storage rather than the settings UI. updateCachedSettings writes the
+    // resolved settings immediately after restoreSettingsAsync, so this is the value the
+    // migration actually settled on -- asserted without depending on the header menu or the
+    // modal, which have nothing to do with what is being tested here.
+    function expectStoredAutoSave(expected) {
+        cy.getAllLocalStorage().should((storage) => {
+            const entry = Object.values(storage).find((origin) => origin.clientSettings);
+            expect(entry, 'clientSettings present in local storage').to.not.equal(undefined);
+
+            const stored = JSON.parse(entry.clientSettings);
+            expect(stored.workspace.autoSave, 'persisted autoSave').to.equal(expected);
+        });
     }
 
     before(() => {
@@ -71,8 +79,7 @@ context('Settings. "Auto save" option.', () => {
             // this pins that policy so a future change to it has to be deliberate.
             seedStoredSettings({ autoSave: false }, null);
 
-            autoSaveCheckbox().should('be.checked');
-            cy.closeSettings();
+            expectStoredAutoSave(true);
         });
 
         it('An opt-out recorded after versioning survives the migration.', () => {
@@ -81,8 +88,7 @@ context('Settings. "Auto save" option.', () => {
             // it off across reloads.
             seedStoredSettings({ autoSave: false, autoSavePreferenceSet: true }, 1);
 
-            autoSaveCheckbox().should('not.be.checked');
-            cy.closeSettings();
+            expectStoredAutoSave(false);
 
             // Leave the default in place for anything that runs after this spec.
             seedStoredSettings({ autoSave: true, autoSavePreferenceSet: true }, 1);
