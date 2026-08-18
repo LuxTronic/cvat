@@ -1538,6 +1538,11 @@ Cypress.Commands.add('renameTask', (oldName, newName) => {
     cy.contains('.cvat-task-details-task-name', newName).should('exist');
 });
 
+// Degrees of slack allowed when asserting a rotation. Observed run-to-run drift is
+// within 0.2 degrees; the rotations under test are tens of degrees apart, so this stays
+// far tighter than anything a real regression would produce.
+const ROTATION_TOLERANCE_DEG = 0.5;
+
 Cypress.Commands.add('shapeRotate', (shape, expectedRotateDeg, pressShift = false) => {
     cy.get(shape).trigger('mousemove');
     cy.get(shape).trigger('mouseover');
@@ -1562,7 +1567,13 @@ Cypress.Commands.add('shapeRotate', (shape, expectedRotateDeg, pressShift = fals
             const modShapeIdString = shape.substring(1); // Remove "#" from the shape id string
             const shapeTransformMatrix = decomposeMatrix(doc.getElementById(modShapeIdString).getCTM());
             cy.get('#cvat_canvas_text_content').should('contain.text', `${shapeTransformMatrix}°`);
-            expect(`${shapeTransformMatrix}°`).to.be.equal(`${expectedRotateDeg}°`);
+            // The angle is recovered from the shape's CTM after a synthetic drag whose
+            // coordinates come from getBoundingClientRect, so it carries sub-pixel noise:
+            // the same gesture lands on 32.2 or 32.3 between runs. Comparing rounded
+            // strings turns that noise into a failure, so compare numerically instead.
+            expect(Number(shapeTransformMatrix)).to.be.closeTo(
+                Number(expectedRotateDeg), ROTATION_TOLERANCE_DEG,
+            );
         });
         cy.get('#root').trigger('mouseup');
     });
