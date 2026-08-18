@@ -812,10 +812,24 @@ Cypress.Commands.add('openProfile', () => {
 });
 
 Cypress.Commands.add('changeWorkspace', (mode) => {
+    // antd keeps a closed dropdown mounted as .ant-select-dropdown-hidden, so asserting
+    // mere existence can pass against a stale hidden popup and then click an option nobody
+    // can see. Every step below is scoped to the visible instance instead.
+    const visibleDropdown = '.cvat-workspace-selector-dropdown:not(.ant-select-dropdown-hidden)';
+
+    // A click landing while the annotation page is still settling leaves the select
+    // unopened -- the ".cvat-workspace-selector-dropdown, but never found it" failure in
+    // ground_truth_jobs. Settle first, then let the retried visibility assertion absorb a
+    // popup that mounts late. A one-shot cy.then() check cannot do that, and a fallback
+    // click driven by one would toggle a just-opened popup back closed.
+    cy.get('.cvat-spinner').should('not.exist');
+    cy.get('.cvat-workspace-selector').should('be.visible');
     cy.get('.cvat-workspace-selector').click();
-    cy.get('.cvat-workspace-selector-dropdown').within(() => {
-        cy.get(`.ant-select-item-option[title="${mode}"]`).click();
-    });
+
+    // Scoped rather than `within`, so a re-render does not leave the retry searching a
+    // detached copy of the dropdown.
+    cy.get(visibleDropdown).should('be.visible');
+    cy.get(`${visibleDropdown} .ant-select-item-option[title="${mode}"]`).click();
 
     cy.get('.cvat-workspace-selector').should('contain.text', mode);
 });
@@ -1538,6 +1552,11 @@ Cypress.Commands.add('renameTask', (oldName, newName) => {
     cy.contains('.cvat-task-details-task-name', newName).should('exist');
 });
 
+// Degrees of slack allowed when asserting a rotation. Observed run-to-run drift is
+// within 0.2 degrees; the rotations under test are tens of degrees apart, so this stays
+// far tighter than anything a real regression would produce.
+const ROTATION_TOLERANCE_DEG = 0.5;
+
 Cypress.Commands.add('shapeRotate', (shape, expectedRotateDeg, pressShift = false) => {
     cy.get(shape).trigger('mousemove');
     cy.get(shape).trigger('mouseover');
@@ -1562,7 +1581,13 @@ Cypress.Commands.add('shapeRotate', (shape, expectedRotateDeg, pressShift = fals
             const modShapeIdString = shape.substring(1); // Remove "#" from the shape id string
             const shapeTransformMatrix = decomposeMatrix(doc.getElementById(modShapeIdString).getCTM());
             cy.get('#cvat_canvas_text_content').should('contain.text', `${shapeTransformMatrix}°`);
-            expect(`${shapeTransformMatrix}°`).to.be.equal(`${expectedRotateDeg}°`);
+            // The angle is recovered from the shape's CTM after a synthetic drag whose
+            // coordinates come from getBoundingClientRect, so it carries sub-pixel noise:
+            // the same gesture lands on 32.2 or 32.3 between runs. Comparing rounded
+            // strings turns that noise into a failure, so compare numerically instead.
+            expect(Number(shapeTransformMatrix)).to.be.closeTo(
+                Number(expectedRotateDeg), ROTATION_TOLERANCE_DEG,
+            );
         });
         cy.get('#root').trigger('mouseup');
     });

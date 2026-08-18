@@ -138,40 +138,36 @@ Cypress.Commands.add('createIssueFromControlButton', (createIssueParams) => {
     cy.checkIssueRegion();
 });
 
+// The issue dialog re-renders as the issue's comments and resolved state load, which
+// detaches whatever element `within` captured. A retry inside that captured subtree then
+// searches a stale copy that will never gain the button, and only reports failure once the
+// command times out. Scoping the selector instead re-queries the footer on every retry.
 Cypress.Commands.add('resolveIssue', (issueLabel, resolveText) => {
     cy.get(issueLabel).click();
     cy.get('.cvat-issue-dialog-input').type(resolveText);
-    cy.get('.cvat-issue-dialog-footer').within(() => {
-        if (resolveText) {
-            cy.intercept('POST', '/api/comments**').as('postComment');
-            cy.contains('button', 'Comment').click();
-            cy.wait('@postComment').its('response.statusCode').should('equal', 201);
-        }
+    if (resolveText) {
+        cy.intercept('POST', '/api/comments**').as('postComment');
+        cy.contains('.cvat-issue-dialog-footer button', 'Comment').click();
+        cy.wait('@postComment').its('response.statusCode').should('equal', 201);
+    }
 
-        cy.intercept('PATCH', '/api/issues/*').as('resolveIssue');
-        cy.contains('button', 'Resolve').click();
-        cy.wait('@resolveIssue').its('response.statusCode').should('equal', 200);
-    });
+    cy.intercept('PATCH', '/api/issues/*').as('resolveIssue');
+    cy.contains('.cvat-issue-dialog-footer button', 'Resolve').click();
+    cy.wait('@resolveIssue').its('response.statusCode').should('equal', 200);
 });
 
 Cypress.Commands.add('reopenIssue', (issueLabel) => {
     cy.get(issueLabel).click();
-    cy.get('.cvat-issue-dialog-footer').within(() => {
-        cy.intercept('PATCH', '/api/issues/*').as('reopenIssue');
-        cy.contains('button', 'Reopen').click();
-        cy.wait('@reopenIssue').its('response.statusCode').should('equal', 200);
-    });
-    cy.get('.cvat-issue-dialog-header').within(() => {
-        cy.get('.anticon-close').click();
-    });
+    cy.intercept('PATCH', '/api/issues/*').as('reopenIssue');
+    cy.contains('.cvat-issue-dialog-footer button', 'Reopen').click();
+    cy.wait('@reopenIssue').its('response.statusCode').should('equal', 200);
+    cy.get('.cvat-issue-dialog-header .anticon-close').click();
 });
 
 Cypress.Commands.add('removeIssue', (issueLabel) => {
     cy.get(issueLabel).click();
     cy.intercept('DELETE', '/api/issues/**').as('removeIssue');
-    cy.get('.cvat-issue-dialog-footer').within(() => {
-        cy.contains('button', 'Remove').click();
-    });
+    cy.contains('.cvat-issue-dialog-footer button', 'Remove').click();
     cy.get('.cvat-modal-confirm-remove-issue').within(() => {
         cy.contains('button', 'Delete').click();
         cy.wait('@removeIssue').its('response.statusCode').should('equal', 204);
