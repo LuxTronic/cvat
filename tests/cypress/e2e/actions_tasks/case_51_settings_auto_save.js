@@ -13,7 +13,10 @@ context('Settings. "Auto save" option.', () => {
     // Rewrites the persisted clientSettings blob and reloads, so restoreSettingsAsync runs
     // against it the way it would in an annotator's browser.
     function seedStoredSettings(workspace, version) {
-        cy.window().then((win) => {
+        // log: false and the explicit return keep the window out of the command log and off
+        // the chain. Yielding it makes the Allure reporter try to serialize the whole window,
+        // which fails the test with "RangeError: Invalid string length" from JSON.stringify.
+        cy.window({ log: false }).then((win) => {
             const stored = JSON.parse(win.localStorage.getItem('clientSettings') || '{}');
             const next = { ...stored, workspace: { ...(stored.workspace || {}), ...workspace } };
             if (version === null) {
@@ -22,6 +25,7 @@ context('Settings. "Auto save" option.', () => {
                 next.version = version;
             }
             win.localStorage.setItem('clientSettings', JSON.stringify(next));
+            return null;
         });
         cy.reload();
         cy.get('.cvat-canvas-container').should('exist').and('be.visible');
