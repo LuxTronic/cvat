@@ -315,6 +315,11 @@ jobs:
   e2e_testing:
     needs: build
     runs-on: ubuntu-latest
+    # Without this the job inherits GitHub's 360 minute ceiling. A wedged browser then
+    # holds a runner for six hours and, because a run cannot be re-run while any job is
+    # still going, blocks re-running the shards that finished. Shards take 8-17 minutes,
+    # so 45 leaves generous headroom while turning a hang into a prompt failure.
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
