@@ -812,10 +812,24 @@ Cypress.Commands.add('openProfile', () => {
 });
 
 Cypress.Commands.add('changeWorkspace', (mode) => {
+    // A click landing while the annotation page is still settling leaves the antd select
+    // unopened. Because antd only mounts the dropdown on first open, the next command then
+    // waits out its full timeout on an element that was never created -- the
+    // ".cvat-workspace-selector-dropdown, but never found it" failure in ground_truth_jobs.
+    // Settle first, and re-click once if the dropdown still is not there.
+    cy.get('.cvat-spinner').should('not.exist');
+    cy.get('.cvat-workspace-selector').should('be.visible');
     cy.get('.cvat-workspace-selector').click();
-    cy.get('.cvat-workspace-selector-dropdown').within(() => {
-        cy.get(`.ant-select-item-option[title="${mode}"]`).click();
+    cy.get('body').then(($body) => {
+        if (!$body.find('.cvat-workspace-selector-dropdown').length) {
+            cy.get('.cvat-workspace-selector').click();
+        }
     });
+
+    // Scoped rather than `within`, so a re-render does not leave the retry searching a
+    // detached copy of the dropdown.
+    cy.get('.cvat-workspace-selector-dropdown').should('exist');
+    cy.get(`.cvat-workspace-selector-dropdown .ant-select-item-option[title="${mode}"]`).click();
 
     cy.get('.cvat-workspace-selector').should('contain.text', mode);
 });
