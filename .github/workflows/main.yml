@@ -419,28 +419,28 @@ jobs:
             tests/coverage/${{ matrix.specs }}_coverage.json
 
       - name: Creating a log file from "cvat" container logs
-        if: failure()
+        if: ${{ failure() || cancelled() }}
         run: |
             docker logs cvat_server > ${{ github.workspace }}/tests/cvat_${{ matrix.specs }}.log
             docker logs cvat_worker_export > ${{ github.workspace }}/tests/cvat_worker_export_${{ matrix.specs }}.log
             docker logs cvat_worker_import > ${{ github.workspace }}/tests/cvat_worker_import_${{ matrix.specs }}.log
 
       - name: Uploading "cvat" container logs as an artifact
-        if: failure()
+        if: ${{ failure() || cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: e2e_container_logs_${{ matrix.specs }}
           path: ${{ github.workspace }}/tests/cvat_${{ matrix.specs }}.log
 
       - name: Uploading cypress screenshots as an artifact
-        if: failure()
+        if: ${{ failure() || cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: cypress_screenshots_${{ matrix.specs }}
           path: ${{ github.workspace }}/tests/cypress/screenshots
 
       - name: Uploading cypress videos as an artifact
-        if: failure()
+        if: ${{ failure() || cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: cypress_videos_${{ matrix.specs }}
