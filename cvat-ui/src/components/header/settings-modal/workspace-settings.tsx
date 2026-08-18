@@ -31,7 +31,6 @@ interface Props {
     textContent: string;
     showTagsOnFrame: boolean;
     onSwitchAutoSave(enabled: boolean): void;
-    onChangeAutoSaveInterval(interval: number): void;
     onChangeFocusedObjectPadding(padding: number): void;
     onChangeDefaultApproxPolyAccuracy(approxPolyAccuracy: number): void;
     onSwitchShowingInterpolatedTracks(enabled: boolean): void;
@@ -61,7 +60,6 @@ function WorkspaceSettingsComponent(props: Props): JSX.Element {
         textContent,
         showTagsOnFrame,
         onSwitchAutoSave,
-        onChangeAutoSaveInterval,
         onChangeFocusedObjectPadding,
         onSwitchShowingInterpolatedTracks,
         onSwitchShowingObjectsTextAlways,
@@ -75,12 +73,14 @@ function WorkspaceSettingsComponent(props: Props): JSX.Element {
         onSwitchShowingTagsOnFrame,
     } = props;
 
-    const minAutoSaveInterval = 1;
-    const maxAutoSaveInterval = 60;
     const minFocusedObjectPadding = 0;
     const maxFocusedObjectPadding = 1000;
     const minControlPointsSize = 2;
     const maxControlPointsSize = 10;
+    const intervalInSeconds = Math.round(autoSaveInterval / 1000);
+    const intervalDescription = intervalInSeconds >= 60 ?
+        `${Math.round(intervalInSeconds / 60)} minute${Math.round(intervalInSeconds / 60) === 1 ? '' : 's'}` :
+        `${intervalInSeconds} second${intervalInSeconds === 1 ? '' : 's'}`;
 
     return (
         <div className='cvat-workspace-settings'>
@@ -97,22 +97,7 @@ function WorkspaceSettingsComponent(props: Props): JSX.Element {
                     </Checkbox>
                 </Col>
                 <Col className='cvat-workspace-settings-auto-save-interval'>
-                    <Text type='secondary'> Auto save every </Text>
-                    <InputNumber
-                        size='small'
-                        min={minAutoSaveInterval}
-                        max={maxAutoSaveInterval}
-                        step={1}
-                        value={Math.round(autoSaveInterval / (60 * 1000))}
-                        onChange={(value: number | undefined | string): void => {
-                            if (typeof value !== 'undefined') {
-                                onChangeAutoSaveInterval(
-                                    Math.floor(clamp(+value, minAutoSaveInterval, maxAutoSaveInterval)) * 60 * 1000,
-                                );
-                            }
-                        }}
-                    />
-                    <Text type='secondary'> minutes </Text>
+                    <Text type='secondary'> Auto save checks for changes every {intervalDescription} </Text>
                 </Col>
             </Row>
             <Row className='cvat-player-setting'>

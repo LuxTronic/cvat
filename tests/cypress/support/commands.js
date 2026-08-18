@@ -110,6 +110,15 @@ Cypress.Commands.add('prepareUserSession', (nextURL = '/tasks') => {
     cy.headlessLogin({ nextURL });
 });
 
+Cypress.Commands.add('disableAutoSave', () => {
+    cy.openSettings();
+    cy.contains('Workspace').click();
+    cy.get('.cvat-workspace-settings-auto-save').within(() => {
+        cy.get('[type="checkbox"]').uncheck();
+    });
+    cy.closeSettings();
+});
+
 Cypress.Commands.add('logout', () => {
     cy.get('.cvat-header-menu-user-dropdown-user').click();
     cy.get('span[aria-label="logout"]').click();
@@ -782,6 +791,12 @@ Cypress.Commands.add('createPolygon', (createPolygonParams, autoborderParams = n
 });
 
 Cypress.Commands.add('clickUserMenuItem', (itemName, verify) => {
+    // Same shape as openOrganizationsMenu: the header re-renders while the user and the
+    // organization list load, so a click captured against the earlier render is dropped and
+    // the menu never opens. Settling first and asserting in a separate command makes cy.get
+    // re-query immediately before the click. Most visible right after a fresh page load.
+    cy.get('.cvat-spinner').should('not.exist');
+    cy.get('.cvat-header-menu-user-dropdown').should('be.visible');
     cy.get('.cvat-header-menu-user-dropdown').click();
     cy.get('.cvat-header-menu')
         .should('exist')

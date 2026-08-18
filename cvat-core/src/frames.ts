@@ -695,6 +695,17 @@ export function getJobFramesMetaSync(jobID: number): FramesMetaData {
     return cached;
 }
 
+// Whether the cached meta holds local changes that patchMeta would send.
+// Unlike getJobFramesMetaSync this never throws: callers such as the autosave timer
+// poll it on a schedule and an unloaded job simply has nothing pending yet.
+export function jobFramesMetaHasUnsavedChanges(jobID: number): boolean {
+    const cached = frameMetaCacheSync[jobID];
+    if (!cached) {
+        return false;
+    }
+    return Object.keys(cached.getUpdated()).length > 0;
+}
+
 export function getFramesMeta(type: 'job' | 'task', id: number, forceReload = false): Promise<FramesMetaData> {
     if (type === 'task') {
         // we do not cache task meta currently. So, each new call will results to the server request

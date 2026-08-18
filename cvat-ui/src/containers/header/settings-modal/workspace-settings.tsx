@@ -7,7 +7,6 @@ import { connect } from 'react-redux';
 
 import {
     switchAutoSave,
-    changeAutoSaveInterval,
     changeFocusedObjectPadding,
     switchShowingInterpolatedTracks,
     switchShowingObjectsTextAlways,
@@ -43,7 +42,6 @@ interface StateToProps {
 
 interface DispatchToProps {
     onSwitchAutoSave(enabled: boolean): void;
-    onChangeAutoSaveInterval(interval: number): void;
     onChangeFocusedObjectPadding(margin: number): void;
     onSwitchShowingInterpolatedTracks(enabled: boolean): void;
     onSwitchShowingObjectsTextAlways(enabled: boolean): void;
@@ -94,7 +92,6 @@ function mapStateToProps(state: CombinedState): StateToProps {
 
 const mapDispatchToProps: DispatchToProps = {
     onSwitchAutoSave: switchAutoSave,
-    onChangeAutoSaveInterval: changeAutoSaveInterval,
     onChangeFocusedObjectPadding: changeFocusedObjectPadding,
     onSwitchShowingInterpolatedTracks: switchShowingInterpolatedTracks,
     onSwitchShowingObjectsTextAlways: switchShowingObjectsTextAlways,

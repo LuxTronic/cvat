@@ -21,6 +21,7 @@ context('Check error cannot read property at saving job', () => {
     before(() => {
         cy.prepareUserSession();
         cy.openTaskJob(taskName);
+        cy.disableAutoSave();
     });
 
     describe(`Testing pr "${prId}"`, () => {

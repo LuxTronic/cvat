@@ -23,6 +23,7 @@ import { Job } from 'cvat-core-wrapper';
 import { CombinedState, Workspace } from 'reducers';
 import { KeyMap } from 'utils/mousetrap-react';
 import { writeLatestFrame } from 'utils/remember-latest-frame';
+import hasUnsavedChanges from 'utils/unsaved-changes';
 
 interface StateToProps {
     jobInstance: Job;
@@ -139,12 +140,13 @@ type Props = StateToProps & DispatchToProps & RouteComponentProps;
 class AudioTopBarContainer extends React.PureComponent<Props> {
     private autoSaveInterval: number | undefined;
     private unblock: any;
+    private autoSaveInProgress = false;
+
+    public state: { lastSavedAt?: Date } = {};
 
     public componentDidMount(): void {
-        const {
-            autoSaveInterval, history, jobInstance, setForceExitAnnotationFlag,
-        } = this.props;
-        this.autoSaveInterval = window.setInterval(this.autoSave.bind(this), autoSaveInterval);
+        const { history, jobInstance, setForceExitAnnotationFlag } = this.props;
+        this.autoSaveInterval = window.setInterval(this.autoSave.bind(this), this.props.autoSaveInterval);
 
         // eslint-disable-next-line @typescript-eslint/no-this-alias
         const self = this;
@@ -154,7 +156,7 @@ class AudioTopBarContainer extends React.PureComponent<Props> {
             writeLatestFrame(jobInstance.id, frameNumber);
 
             if (
-                jobInstance.annotations.hasUnsavedChanges() &&
+                hasUnsavedChanges(jobInstance) &&
                 location.pathname !== `/tasks/${taskID}/jobs/${jobID}` &&
                 !forceExit
             ) {
@@ -172,11 +174,18 @@ class AudioTopBarContainer extends React.PureComponent<Props> {
     }
 
     public componentDidUpdate(prevProps: Props): void {
-        const { autoSaveInterval } = this.props;
+        if (this.props.saving !== prevProps.saving && !this.props.saving) {
+            if (this.autoSaveInProgress) {
+                this.autoSaveInProgress = false;
+            }
+            if (!hasUnsavedChanges(this.props.jobInstance)) {
+                this.setState({ lastSavedAt: new Date() });
+            }
+        }
 
-        if (autoSaveInterval !== prevProps.autoSaveInterval) {
+        if (this.props.autoSaveInterval !== prevProps.autoSaveInterval) {
             if (this.autoSaveInterval) window.clearInterval(this.autoSaveInterval);
-            this.autoSaveInterval = window.setInterval(this.autoSave.bind(this), autoSaveInterval);
+            this.autoSaveInterval = window.setInterval(this.autoSave.bind(this), this.props.autoSaveInterval);
         }
     }
 
@@ -210,7 +219,7 @@ class AudioTopBarContainer extends React.PureComponent<Props> {
         } = this.props;
 
         writeLatestFrame(jobInstance.id, frameNumber);
-        if (jobInstance.annotations.hasUnsavedChanges() && !forceExit) {
+        if (hasUnsavedChanges(jobInstance) && !forceExit) {
             const confirmationMessage = 'You have unsaved changes, please confirm leaving this page.';
             // eslint-disable-next-line no-param-reassign
             event.returnValue = confirmationMessage;
@@ -224,9 +233,12 @@ class AudioTopBarContainer extends React.PureComponent<Props> {
     };
 
     private autoSave(): void {
-        const { autoSave, saving, onSaveAnnotation } = this.props;
+        const {
+            autoSave, saving, jobInstance, onSaveAnnotation,
+        } = this.props;
 
-        if (autoSave && !saving) {
+        if (autoSave && !saving && hasUnsavedChanges(jobInstance)) {
+            this.autoSaveInProgress = true;
             onSaveAnnotation();
         }
     }
@@ -249,11 +261,13 @@ class AudioTopBarContainer extends React.PureComponent<Props> {
             showFilters,
             showStatistics,
         } = this.props;
+        const { lastSavedAt } = this.state;
 
         return (
             <AudioTopBarComponent
                 playing={playing}
-                saving={saving}
+                saving={saving && !this.autoSaveInProgress}
+                lastSavedAt={lastSavedAt}
                 workspace={workspace}
                 jobInstance={jobInstance}
                 keyMap={keyMap}

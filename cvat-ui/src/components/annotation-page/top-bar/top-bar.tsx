@@ -12,6 +12,7 @@ import {
 import { Job } from 'cvat-core-wrapper';
 import { KeyMap } from 'utils/mousetrap-react';
 import { Chapter } from 'cvat-core/src/frames';
+import hasUnsavedChanges from 'utils/unsaved-changes';
 import LeftGroup from './left-group';
 import PlayerButtons from './player-buttons';
 import PlayerNavigation from './player-navigation';
@@ -20,6 +21,7 @@ import RightGroup from './right-group';
 interface Props {
     playing: boolean;
     saving: boolean;
+    lastSavedAt?: Date;
     chapters: Chapter[];
     hoveredChapter: number | null;
     frameNumber: number;
@@ -84,6 +86,7 @@ interface Props {
 export default function AnnotationTopBarComponent(props: Props): JSX.Element {
     const {
         saving,
+        lastSavedAt,
         undoAction,
         redoAction,
         playing,
@@ -210,6 +213,8 @@ export default function AnnotationTopBarComponent(props: Props): JSX.Element {
         <Row justify='space-between'>
             <LeftGroup
                 saving={saving}
+                hasUnsavedChanges={hasUnsavedChanges(jobInstance)}
+                lastSavedAt={lastSavedAt}
                 undoAction={undoAction}
                 redoAction={redoAction}
                 undoShortcut={undoShortcut}

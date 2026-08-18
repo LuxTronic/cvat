@@ -30,14 +30,14 @@ registerComponentShortcuts(componentShortcuts);
 
 function AudioSaveAnnotationsButton(): JSX.Element {
     const dispatch = useDispatch();
-    const {
-        isSaving, keyMap, normKeyMap,
-    } = useSelector((state: CombinedState) => ({
+    const { isSaving, keyMap, normKeyMap } = useSelector((state: CombinedState) => ({
         isSaving: state.annotation.annotations.saving.uploading,
         keyMap: state.shortcuts.keyMap,
         normKeyMap: state.shortcuts.normalizedKeyMap,
     }), shallowEqual);
 
+    // See the desktop save button: manual save also flushes frame meta and the NEW -> IN_PROGRESS
+    // transition, so it must not be gated on the annotation collection being dirty.
     const trySave = useCallback(() => {
         if (isSaving) return;
         dispatch(saveAnnotationsAsync());

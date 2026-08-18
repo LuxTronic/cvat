@@ -10,6 +10,8 @@ import { Job } from 'cvat-core-wrapper';
 import { KeyMap } from 'utils/mousetrap-react';
 import { AudioSeekIntent } from 'actions/audio-actions';
 
+import hasUnsavedChanges from 'utils/unsaved-changes';
+
 import AudioLeftGroup from './audio-left-group';
 import AudioPlayerNavigation from './audio-player-navigation';
 import AudioRightGroup from './audio-right-group';
@@ -17,6 +19,7 @@ import AudioRightGroup from './audio-right-group';
 interface Props {
     playing: boolean;
     saving: boolean;
+    lastSavedAt?: Date;
     undoAction?: string;
     redoAction?: string;
     workspace: Workspace;
@@ -39,6 +42,7 @@ interface Props {
 export default function AudioTopBarComponent(props: Props): JSX.Element {
     const {
         saving,
+        lastSavedAt,
         undoAction,
         redoAction,
         playing,
@@ -63,6 +67,8 @@ export default function AudioTopBarComponent(props: Props): JSX.Element {
         <Row justify='space-between'>
             <AudioLeftGroup
                 saving={saving}
+                hasUnsavedChanges={hasUnsavedChanges(jobInstance)}
+                lastSavedAt={lastSavedAt}
                 undoAction={undoAction}
                 redoAction={redoAction}
                 undoShortcut={undoShortcut}

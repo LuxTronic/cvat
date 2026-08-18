@@ -42,6 +42,7 @@ import { writeLatestFrame } from 'utils/remember-latest-frame';
 import { finishDraw } from 'utils/drawing';
 import { toClipboard } from 'utils/to-clipboard';
 import { Chapter } from 'cvat-core/src/frames';
+import hasUnsavedChanges from 'utils/unsaved-changes';
 
 interface StateToProps {
     chapters: Chapter[];
@@ -265,6 +266,9 @@ class AnnotationTopBarContainer extends React.PureComponent<Props> {
     private autoSaveInterval: number | undefined;
     private isWaitingForPlayDelay: boolean;
     private unblock: any;
+    private autoSaveInProgress = false;
+
+    public state: { lastSavedAt?: Date } = {};
 
     constructor(props: Props) {
         super(props);
@@ -273,10 +277,8 @@ class AnnotationTopBarContainer extends React.PureComponent<Props> {
     }
 
     public componentDidMount(): void {
-        const {
-            autoSaveInterval, history, jobInstance, setForceExitAnnotationFlag,
-        } = this.props;
-        this.autoSaveInterval = window.setInterval(this.autoSave.bind(this), autoSaveInterval);
+        const { history, jobInstance, setForceExitAnnotationFlag } = this.props;
+        this.autoSaveInterval = window.setInterval(this.autoSave.bind(this), this.props.autoSaveInterval);
 
         // eslint-disable-next-line @typescript-eslint/no-this-alias
         const self = this;
@@ -286,7 +288,7 @@ class AnnotationTopBarContainer extends React.PureComponent<Props> {
             writeLatestFrame(jobInstance.id, frameNumber);
 
             if (
-                jobInstance.annotations.hasUnsavedChanges() &&
+                hasUnsavedChanges(jobInstance) &&
                 location.pathname !== `/tasks/${taskID}/jobs/${jobID}` &&
                 !forceExit
             ) {
@@ -304,11 +306,18 @@ class AnnotationTopBarContainer extends React.PureComponent<Props> {
     }
 
     public componentDidUpdate(prevProps: Props): void {
-        const { autoSaveInterval } = this.props;
+        if (this.props.saving !== prevProps.saving && !this.props.saving) {
+            if (this.autoSaveInProgress) {
+                this.autoSaveInProgress = false;
+            }
+            if (!hasUnsavedChanges(this.props.jobInstance)) {
+                this.setState({ lastSavedAt: new Date() });
+            }
+        }
 
-        if (autoSaveInterval !== prevProps.autoSaveInterval) {
+        if (this.props.autoSaveInterval !== prevProps.autoSaveInterval) {
             if (this.autoSaveInterval) window.clearInterval(this.autoSaveInterval);
-            this.autoSaveInterval = window.setInterval(this.autoSave.bind(this), autoSaveInterval);
+            this.autoSaveInterval = window.setInterval(this.autoSave.bind(this), this.props.autoSaveInterval);
         }
         this.handlePlayIfNecessary();
     }
@@ -668,7 +677,7 @@ class AnnotationTopBarContainer extends React.PureComponent<Props> {
         const { frameNumber } = this.props;
 
         writeLatestFrame(jobInstance.id, frameNumber);
-        if (jobInstance.annotations.hasUnsavedChanges() && !forceExit) {
+        if (hasUnsavedChanges(jobInstance) && !forceExit) {
             const confirmationMessage = 'You have unsaved changes, please confirm leaving this page.';
 
             // eslint-disable-next-line no-param-reassign
@@ -683,9 +692,12 @@ class AnnotationTopBarContainer extends React.PureComponent<Props> {
     };
 
     private autoSave(): void {
-        const { autoSave, saving, onSaveAnnotation } = this.props;
+        const {
+            autoSave, saving, jobInstance, onSaveAnnotation,
+        } = this.props;
 
-        if (autoSave && !saving) {
+        if (autoSave && !saving && hasUnsavedChanges(jobInstance)) {
+            this.autoSaveInProgress = true;
             onSaveAnnotation();
         }
     }
@@ -724,6 +736,7 @@ class AnnotationTopBarContainer extends React.PureComponent<Props> {
             switchShowSearchPallet,
             showSearchFrameByName,
         } = this.props;
+        const { lastSavedAt } = this.state;
 
         return (
             <AnnotationTopBarComponent
@@ -756,7 +769,8 @@ class AnnotationTopBarContainer extends React.PureComponent<Props> {
                 playing={playing}
                 chapters={chapters}
                 hoveredChapter={hoveredChapter}
-                saving={saving}
+                saving={saving && !this.autoSaveInProgress}
+                lastSavedAt={lastSavedAt}
                 ranges={ranges}
                 startFrame={startFrame}
                 stopFrame={stopFrame}
