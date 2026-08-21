@@ -15,6 +15,7 @@ import { CubeIcon } from 'icons';
 import CVATTooltip from 'components/common/cvat-tooltip';
 import DrawShapePopoverContainer from 'containers/annotation-page/standard-workspace/controls-side-bar/draw-shape-popover';
 import withVisibilityHandling from './handle-popover-visibility';
+import useDrawShapeTooltip from './use-draw-shape-tooltip';
 
 export interface Props {
     canvasInstance: Canvas | Canvas3d;
@@ -24,6 +25,7 @@ export interface Props {
 
 const CustomPopover = withVisibilityHandling(Popover, 'draw-cuboid');
 function DrawCuboidControl(props: Props): JSX.Element {
+    const tooltip = useDrawShapeTooltip('Draw a cuboid');
     const { canvasInstance, isDrawing, disabled } = props;
     const dynamicPopoverProps = isDrawing ? {
         overlayStyle: {
@@ -49,7 +51,7 @@ function DrawCuboidControl(props: Props): JSX.Element {
             placement='right'
             content={<DrawShapePopoverContainer shapeType={ShapeType.CUBOID} />}
         >
-            <CVATTooltip title='Draw a cuboid' placement='right'>
+            <CVATTooltip title={tooltip} placement='right'>
                 <Icon {...dynamicIconProps} component={CubeIcon} />
             </CVATTooltip>
         </CustomPopover>

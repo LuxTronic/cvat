@@ -28,6 +28,10 @@ function SnapToolsControlComponent(): JSX.Element {
 
     const isAnySnapEnabled = automaticBordering || snapToPoint;
 
+    const borderingShortcut = normalizedKeyMap.SWITCH_AUTOMATIC_BORDERING;
+    const snapPointShortcut = normalizedKeyMap.SWITCH_SNAP_TO_POINT;
+    const snapTooltip = `Snap tools ${borderingShortcut}/${snapPointShortcut}`;
+
     const popoverContent = (
         <div className='cvat-snap-tools-control-popover-content'>
             <Row justify='start'>
@@ -80,7 +84,7 @@ function SnapToolsControlComponent(): JSX.Element {
             overlayClassName='cvat-snap-tools-control-popover'
             content={popoverContent}
         >
-            <CVATTooltip title='Snap tools' placement='right'>
+            <CVATTooltip title={snapTooltip} placement='right'>
                 <Icon
                     className={`cvat-snap-tools-control ${isAnySnapEnabled ? 'cvat-snap-tools-active' : ''}`}
                     component={SnapToolsIcon}

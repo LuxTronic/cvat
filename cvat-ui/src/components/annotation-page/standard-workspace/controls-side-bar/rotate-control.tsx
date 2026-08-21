@@ -44,7 +44,10 @@ function RotateControl(props: Props): JSX.Element {
                 </>
             )}
         >
-            <CVATTooltip title='Rotate the image' placement='right'>
+            <CVATTooltip
+                title={`Rotate the image ${anticlockwiseShortcut}/${clockwiseShortcut}`}
+                placement='right'
+            >
                 <Icon className='cvat-rotate-canvas-control' component={RotateIcon} />
             </CVATTooltip>
         </CustomPopover>

@@ -13,6 +13,7 @@ import { ShapeType } from 'cvat-core-wrapper';
 import CVATTooltip from 'components/common/cvat-tooltip';
 import DrawShapePopoverContainer from 'containers/annotation-page/standard-workspace/controls-side-bar/draw-shape-popover';
 import withVisibilityHandling from './handle-popover-visibility';
+import useDrawShapeTooltip from './use-draw-shape-tooltip';
 
 export interface Props {
     canvasInstance: Canvas;
@@ -22,6 +23,7 @@ export interface Props {
 
 const CustomPopover = withVisibilityHandling(Popover, 'draw-rectangle');
 function DrawRectangleControl(props: Props): JSX.Element {
+    const tooltip = useDrawShapeTooltip('Draw a rectangle');
     const { canvasInstance, isDrawing, disabled } = props;
     const dynamicPopoverProps = isDrawing ? {
         overlayStyle: {
@@ -47,7 +49,7 @@ function DrawRectangleControl(props: Props): JSX.Element {
             placement='right'
             content={<DrawShapePopoverContainer shapeType={ShapeType.RECTANGLE} />}
         >
-            <CVATTooltip title='Draw a rectangle' placement='right'>
+            <CVATTooltip title={tooltip} placement='right'>
                 <Icon {...dynamicIconProps} component={RectangleIcon} />
             </CVATTooltip>
         </CustomPopover>
