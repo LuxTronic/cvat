@@ -71,17 +71,6 @@ function DrawShapePopoverComponent(props: Props): JSX.Element {
                     <Text className='cvat-text-color' strong>{`Draw new ${shapeType}`}</Text>
                 </Col>
             </Row>
-            {/* One shared hint for all eight draw controls. It lives here rather than in
-                each control's hover tooltip: that tooltip renders at placement='right',
-                the same place this popover does, so a hint long enough to be useful
-                covered the label selector underneath it (see #9). */}
-            <Row justify='start'>
-                <Col>
-                    <Text type='secondary' className='cvat-draw-shape-repeat-hint'>
-                        {`Press ${repeatShapeShortcut} to repeat the last drawing action`}
-                    </Text>
-                </Col>
-            </Row>
             <Row justify='start'>
                 <Col>
                     <Text className='cvat-text-color'>Label</Text>
@@ -193,14 +182,18 @@ function DrawShapePopoverComponent(props: Props): JSX.Element {
             ) : null}
             <Row justify='space-around'>
                 <Col span={24}>
-                    <Button className={`cvat-draw-${shapeType}-shape-button`} onClick={onDrawShape}>Shape</Button>
+                    <CVATTooltip title={`Press ${repeatShapeShortcut} to draw again`}>
+                        <Button className={`cvat-draw-${shapeType}-shape-button`} onClick={onDrawShape}>Shape</Button>
+                    </CVATTooltip>
                     {shapeType !== ShapeType.MASK && (
-                        <Button
-                            className={`cvat-draw-${shapeType}-track-button`}
-                            onClick={onDrawTrack}
-                        >
-                            Track
-                        </Button>
+                        <CVATTooltip title={`Press ${repeatShapeShortcut} to draw again`}>
+                            <Button
+                                className={`cvat-draw-${shapeType}-track-button`}
+                                onClick={onDrawTrack}
+                            >
+                                Track
+                            </Button>
+                        </CVATTooltip>
                     )}
                 </Col>
             </Row>
