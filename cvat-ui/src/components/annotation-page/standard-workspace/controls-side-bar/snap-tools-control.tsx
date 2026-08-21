@@ -80,12 +80,10 @@ function SnapToolsControlComponent(): JSX.Element {
             overlayClassName='cvat-snap-tools-control-popover'
             content={popoverContent}
         >
-            <CVATTooltip title='Snap tools' placement='right'>
-                <Icon
-                    className={`cvat-snap-tools-control ${isAnySnapEnabled ? 'cvat-snap-tools-active' : ''}`}
-                    component={SnapToolsIcon}
-                />
-            </CVATTooltip>
+            <Icon
+                className={`cvat-snap-tools-control ${isAnySnapEnabled ? 'cvat-snap-tools-active' : ''}`}
+                component={SnapToolsIcon}
+            />
         </CustomPopover>
     );
 }

@@ -12,7 +12,6 @@ import { ShapeType } from 'cvat-core-wrapper';
 
 import { CubeIcon } from 'icons';
 
-import CVATTooltip from 'components/common/cvat-tooltip';
 import DrawShapePopoverContainer from 'containers/annotation-page/standard-workspace/controls-side-bar/draw-shape-popover';
 import withVisibilityHandling from './handle-popover-visibility';
 
@@ -49,9 +48,7 @@ function DrawCuboidControl(props: Props): JSX.Element {
             placement='right'
             content={<DrawShapePopoverContainer shapeType={ShapeType.CUBOID} />}
         >
-            <CVATTooltip title='Draw a cuboid' placement='right'>
-                <Icon {...dynamicIconProps} component={CubeIcon} />
-            </CVATTooltip>
+            <Icon {...dynamicIconProps} component={CubeIcon} />
         </CustomPopover>
     );
 }

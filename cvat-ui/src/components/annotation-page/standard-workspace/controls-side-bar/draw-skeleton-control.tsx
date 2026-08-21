@@ -8,7 +8,6 @@ import { ShapeType } from 'cvat-core-wrapper';
 
 import { SkeletonIcon } from 'icons';
 
-import CVATTooltip from 'components/common/cvat-tooltip';
 import DrawShapePopoverContainer from 'containers/annotation-page/standard-workspace/controls-side-bar/draw-shape-popover';
 import withVisibilityHandling from './handle-popover-visibility';
 
@@ -45,9 +44,7 @@ function DrawSkeletonControl(props: Props): JSX.Element {
             placement='right'
             content={<DrawShapePopoverContainer shapeType={ShapeType.SKELETON} />}
         >
-            <CVATTooltip title='Draw a skeleton' placement='right'>
-                <Icon {...dynamicIconProps} component={SkeletonIcon} />
-            </CVATTooltip>
+            <Icon {...dynamicIconProps} component={SkeletonIcon} />
         </CustomPopover>
     );
 }

@@ -9,7 +9,6 @@ import Icon from '@ant-design/icons';
 import { Canvas } from 'cvat-canvas-wrapper';
 import { TagIcon } from 'icons';
 
-import CVATTooltip from 'components/common/cvat-tooltip';
 import SetupTagPopoverContainer from 'containers/annotation-page/standard-workspace/controls-side-bar/setup-tag-popover';
 import withVisibilityHandling from './handle-popover-visibility';
 
@@ -26,9 +25,7 @@ function SetupTagControl(props: Props): JSX.Element {
         <Icon className='cvat-setup-tag-control cvat-disabled-canvas-control' component={TagIcon} />
     ) : (
         <CustomPopover placement='right' content={<SetupTagPopoverContainer />}>
-            <CVATTooltip title='Create a tag' placement='right'>
-                <Icon className='cvat-setup-tag-control' component={TagIcon} />
-            </CVATTooltip>
+            <Icon className='cvat-setup-tag-control' component={TagIcon} />
         </CustomPopover>
     );
 }

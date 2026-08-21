@@ -1837,9 +1837,7 @@ export class ToolsControlComponent extends React.PureComponent<Props, State> {
                         toolsPopoverOpen: visible,
                     })}
                 >
-                    <CVATTooltip title='AI Tools' placement='right'>
-                        <Icon {...dynamicIconProps} component={AIToolsIcon} />
-                    </CVATTooltip>
+                    <Icon {...dynamicIconProps} component={AIToolsIcon} />
                 </CustomPopover>
                 {interactionContent}
                 {detectionContent}
