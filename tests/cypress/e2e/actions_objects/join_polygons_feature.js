@@ -125,10 +125,15 @@ context('Join polygons feature', { scrollBehavior: false }, () => {
     });
 
     it('Joining a self-intersected polygon throws an exception', () => {
-        cy.once('uncaught:exception', (err) => {
-            expect(err.message).to.contain(
-                'Cannot join: not enough valid polygons (need at least 2 non-self-intersecting polygons)',
-            );
+        // Suppress first, assert afterwards. Asserting inside the handler means a
+        // mismatched message throws before `return false` runs, so the exception is
+        // never suppressed; and `once` only covers the first throw. Either way the page
+        // is left broken, the afterEach hook fails against it, and the runner stops
+        // making progress instead of moving to the next spec -- which is how this shard
+        // came to hang for 45 minutes on every PR.
+        let caught = null;
+        cy.on('uncaught:exception', (err) => {
+            caught = err;
             return false;
         });
         cy.createPolygon(selfIntersectingPolygonPoints);
@@ -145,5 +150,11 @@ context('Join polygons feature', { scrollBehavior: false }, () => {
         cy.closeNotification('.cvat-notification-warning-canvas');
         cy.get('#cvat_canvas_shape_1').should('exist');
         cy.get('#cvat_canvas_shape_2').should('exist');
+        cy.then(() => {
+            expect(caught, 'expected the join to raise an uncaught exception').to.not.be.null;
+            expect(caught.message).to.contain(
+                'Cannot join: not enough valid polygons (need at least 2 non-self-intersecting polygons)',
+            );
+        });
     });
 });
