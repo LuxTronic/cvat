@@ -22,8 +22,17 @@ context('Join polygons feature', { scrollBehavior: false }, () => {
         cy.get('.cvat-join-control').should('have.class', 'cvat-active-canvas-control');
         for (const shape of shapes) {
             cy.get(shape.objectId).click(shape.position); // non-overlapping shape parts
+            cy.get(shape.objectId).then(($el) => {
+                cy.task('log', `DIAG click ${shape.objectId}@${shape.position || 'center'} -> class="${$el[0].getAttribute('class')}"`);
+            });
         }
+        cy.document().then((doc) => {
+            const all = Array.from(doc.querySelectorAll('.cvat_canvas_shape'))
+                .map((n) => `${n.id}:${n.getAttribute('class')}`);
+            cy.task('log', `DIAG before-j shapes=${JSON.stringify(all)}`);
+        });
         cy.realPress('j');
+        cy.task('log', 'DIAG pressed j');
     }
 
     function checkMergeSuccess() {
