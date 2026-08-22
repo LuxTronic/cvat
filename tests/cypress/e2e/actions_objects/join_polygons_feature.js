@@ -138,7 +138,7 @@ context('Join polygons feature', { scrollBehavior: false }, () => {
     // not being produced at all. That needs a running stack to diagnose.
     //
     // See LuxTronic/ml-infrastructure#808. Re-enable with the fix, not on its own.
-    it.skip('Joining a self-intersected polygon throws an exception', () => {
+    it('DIAG self-intersected polygon', () => {
         let caught = null;
         cy.on('uncaught:exception', (err) => {
             // Only the expected error is suppressed; anything else still fails the test,
@@ -149,11 +149,26 @@ context('Join polygons feature', { scrollBehavior: false }, () => {
             }
             return true;
         });
+        cy.task('log', 'DIAG: creating self-intersecting polygon');
         cy.createPolygon(selfIntersectingPolygonPoints);
+        cy.task('log', 'DIAG: polygon created, joining');
         joinShapes([
             { objectId: '#cvat_canvas_shape_1', position: 'top' },
             { objectId: '#cvat_canvas_shape_2', position: 'right' },
         ]);
+        cy.task('log', 'DIAG: join issued');
+        // eslint-disable-next-line cypress/no-unnecessary-waiting
+        cy.wait(4000);
+        cy.document().then((doc) => {
+            const notices = Array.from(doc.querySelectorAll('.ant-notification-notice'))
+                .map((n) => `${n.className}::${(n.textContent || '').slice(0, 140)}`);
+            const shapes = Array.from(doc.querySelectorAll('.cvat_canvas_shape')).map((n) => n.id);
+            cy.task('log', `DIAG caught=${caught ? caught.message : 'NONE'}`);
+            cy.task('log', `DIAG noticeCount=${notices.length}`);
+            notices.forEach((n, i) => cy.task('log', `DIAG notice[${i}]=${n}`));
+            cy.task('log', `DIAG shapes=${JSON.stringify(shapes)}`);
+        });
+        cy.task('log', 'DIAG: now running the original assertions');
         cy.get('.cvat-notification-notice-canvas-error-occurred')
             .should('exist').and('be.visible');
         cy.closeNotification('.cvat-notification-notice-canvas-error-occurred');
