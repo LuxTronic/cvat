@@ -21,7 +21,24 @@ context('Join polygons feature', { scrollBehavior: false }, () => {
         cy.get('.cvat-join-control').should('exist').and('be.visible').click();
         cy.get('.cvat-join-control').should('have.class', 'cvat-active-canvas-control');
         for (const shape of shapes) {
-            cy.get(shape.objectId).click(shape.position); // non-overlapping shape parts
+            if (shape.fraction) {
+                // A position keyword is a point on the bounding box, which is not
+                // necessarily on the shape. Click a fraction of the box instead, so a
+                // concave or self-intersecting outline can name a point inside itself.
+                const [fx, fy] = shape.fraction;
+                cy.get(shape.objectId).then(($el) => {
+                    const { width, height } = $el[0].getBoundingClientRect();
+                    cy.wrap($el).click(width * fx, height * fy);
+                });
+            } else {
+                cy.get(shape.objectId).click(shape.position); // non-overlapping shape parts
+            }
+            // A click that misses the shape lands on empty canvas and clears the whole
+            // selection, so `j` then does nothing at all: no join, no error, no
+            // notification. The test used to sit waiting on a notification that was
+            // never coming, fail, and wedge the shard. Fail here instead, where the
+            // cause is legible.
+            cy.get(shape.objectId).should('have.class', 'cvat_canvas_shape_selection');
         }
         cy.realPress('j');
     }
@@ -127,18 +144,7 @@ context('Join polygons feature', { scrollBehavior: false }, () => {
         });
     });
 
-    // Quarantined: this test fails on assertion timeouts and then wedges the whole
-    // actions_objects shard -- the afterEach hook fails against the broken page and
-    // Cypress stops advancing, so the job is killed at timeout-minutes and every other
-    // spec after this one never runs. It has blocked every CVAT PR since 11 Aug.
-    //
-    // Hardening the exception handler was tried first and did not help, which rules the
-    // handler out: the test times out waiting for
-    // .cvat-notification-notice-canvas-error-occurred, so the expected error state is
-    // not being produced at all. That needs a running stack to diagnose.
-    //
-    // See LuxTronic/ml-infrastructure#808. Re-enable with the fix, not on its own.
-    it.skip('Joining a self-intersected polygon throws an exception', () => {
+    it('Joining a self-intersected polygon throws an exception', () => {
         let caught = null;
         cy.on('uncaught:exception', (err) => {
             // Only the expected error is suppressed; anything else still fails the test,
@@ -152,7 +158,10 @@ context('Join polygons feature', { scrollBehavior: false }, () => {
         cy.createPolygon(selfIntersectingPolygonPoints);
         joinShapes([
             { objectId: '#cvat_canvas_shape_1', position: 'top' },
-            { objectId: '#cvat_canvas_shape_2', position: 'right' },
+            // The self-intersecting outline is a bowtie: two lobes meeting at the
+            // centre, so the bounding box's right edge midpoint is on the boundary
+            // rather than inside. 85% across, halfway down is inside the right lobe.
+            { objectId: '#cvat_canvas_shape_2', fraction: [0.85, 0.5] },
         ]);
         cy.get('.cvat-notification-notice-canvas-error-occurred')
             .should('exist').and('be.visible');
