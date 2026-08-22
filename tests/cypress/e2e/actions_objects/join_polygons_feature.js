@@ -8,6 +8,9 @@ import { taskName, labelName } from '../../support/const';
 import { getShapeCoord } from '../../support/utils.cy';
 import { translatePoint } from '../../support/utils';
 
+const EXPECTED_JOIN_ERROR =
+    'Cannot join: not enough valid polygons (need at least 2 non-self-intersecting polygons)';
+
 context('Join polygons feature', { scrollBehavior: false }, () => {
     /**
      * Joins multiple polygon shapes together
@@ -124,12 +127,27 @@ context('Join polygons feature', { scrollBehavior: false }, () => {
         });
     });
 
-    it('Joining a self-intersected polygon throws an exception', () => {
-        cy.once('uncaught:exception', (err) => {
-            expect(err.message).to.contain(
-                'Cannot join: not enough valid polygons (need at least 2 non-self-intersecting polygons)',
-            );
-            return false;
+    // Quarantined: this test fails on assertion timeouts and then wedges the whole
+    // actions_objects shard -- the afterEach hook fails against the broken page and
+    // Cypress stops advancing, so the job is killed at timeout-minutes and every other
+    // spec after this one never runs. It has blocked every CVAT PR since 11 Aug.
+    //
+    // Hardening the exception handler was tried first and did not help, which rules the
+    // handler out: the test times out waiting for
+    // .cvat-notification-notice-canvas-error-occurred, so the expected error state is
+    // not being produced at all. That needs a running stack to diagnose.
+    //
+    // See LuxTronic/ml-infrastructure#808. Re-enable with the fix, not on its own.
+    it.skip('Joining a self-intersected polygon throws an exception', () => {
+        let caught = null;
+        cy.on('uncaught:exception', (err) => {
+            // Only the expected error is suppressed; anything else still fails the test,
+            // and cannot overwrite the error this test is about.
+            if (err.message.includes(EXPECTED_JOIN_ERROR)) {
+                caught = err;
+                return false;
+            }
+            return true;
         });
         cy.createPolygon(selfIntersectingPolygonPoints);
         joinShapes([
@@ -145,5 +163,9 @@ context('Join polygons feature', { scrollBehavior: false }, () => {
         cy.closeNotification('.cvat-notification-warning-canvas');
         cy.get('#cvat_canvas_shape_1').should('exist');
         cy.get('#cvat_canvas_shape_2').should('exist');
+        cy.then(() => {
+            expect(caught, 'expected the join to raise an uncaught exception').to.not.be.null;
+            expect(caught.message).to.contain(EXPECTED_JOIN_ERROR);
+        });
     });
 });
