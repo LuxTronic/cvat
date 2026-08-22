@@ -224,10 +224,19 @@ context('Snap tool feature.', () => {
                 // Collect the polygon points coordinates and verify they match rotated rectangle corners
                 getShapeCoord('polygon', '#cvat_canvas_shape_3').then((polygonCoords) => {
                     expect(polygonCoords).to.have.length(3);
+                    // DIAGNOSTIC (temporary): print every actual and expected point so a
+                    // failure shows whether the points are wrong or merely ordered
+                    // differently. Cypress reports only the first failed assertion, which
+                    // cannot distinguish those two.
+                    const actualPts = polygonCoords.map(rawPointToPoint);
+                    const dump = ` | actual=${JSON.stringify(actualPts)}` +
+                        ` expected=${JSON.stringify(rotatedCornersGlobal)}` +
+                        ` unrotated=${JSON.stringify(getRectCorners(rectangleGlobal, true))}`;
+                    cy.log(dump);
                     polygonCoords.forEach((rawPoint, i) => {
                         const p = rawPointToPoint(rawPoint);
-                        expect(p.x).to.be.closeTo(rotatedCornersGlobal[i].x, 1);
-                        expect(p.y).to.be.closeTo(rotatedCornersGlobal[i].y, 1);
+                        expect(p.x, dump).to.be.closeTo(rotatedCornersGlobal[i].x, 1);
+                        expect(p.y, dump).to.be.closeTo(rotatedCornersGlobal[i].y, 1);
                     });
                 });
             });
