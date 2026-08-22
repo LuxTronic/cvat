@@ -253,6 +253,19 @@ context('Snap tool feature.', () => {
                         usedCorners.add(cornerIdx);
                     });
                     expect(usedCorners.size, 'each point should snap to its own corner').to.equal(3);
+
+                    // Only the middle corner is free. The polygon is drawn between two
+                    // opposite corners, so tl (0) and br (2) are fixed endpoints and must
+                    // both be present; autoborder then fills in either tr (1) or bl (3).
+                    // Without pinning the endpoints, a {tr, br, bl} result would satisfy
+                    // the set check above while tl had gone missing.
+                    const [TL, TR, BR, BL] = [0, 1, 2, 3];
+                    expect(usedCorners.has(TL), 'the tl endpoint should be snapped').to.equal(true);
+                    expect(usedCorners.has(BR), 'the br endpoint should be snapped').to.equal(true);
+                    expect(
+                        [TR, BL].filter((i) => usedCorners.has(i)),
+                        'exactly one of the two equal-length autoborder paths should be taken',
+                    ).to.have.length(1);
                 });
             });
 
