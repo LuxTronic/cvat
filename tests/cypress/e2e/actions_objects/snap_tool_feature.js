@@ -224,11 +224,48 @@ context('Snap tool feature.', () => {
                 // Collect the polygon points coordinates and verify they match rotated rectangle corners
                 getShapeCoord('polygon', '#cvat_canvas_shape_3').then((polygonCoords) => {
                     expect(polygonCoords).to.have.length(3);
-                    polygonCoords.forEach((rawPoint, i) => {
+
+                    // Compare as a set, not by position. The polygon spans two opposite
+                    // corners of a square and autoborder walks the shorter way round --
+                    // but on a square both ways are the same length, so whether the
+                    // middle point is tr or bl is a tie broken by sub-pixel noise.
+                    // Asserting a fixed order asserts one side of that coin flip: it
+                    // held on 5 Aug and stopped holding later against identical canvas
+                    // code, with every point still landing exactly on a rotated corner.
+                    //
+                    // What the feature actually promises is that each point snaps to a
+                    // distinct rotated corner, and that is what is checked here. The
+                    // unrotated corners sit ~24px away, well outside the 1px tolerance,
+                    // so this still fails if rotation stops being applied.
+                    const usedCorners = new Set();
+                    polygonCoords.forEach((rawPoint) => {
                         const p = rawPointToPoint(rawPoint);
-                        expect(p.x).to.be.closeTo(rotatedCornersGlobal[i].x, 1);
-                        expect(p.y).to.be.closeTo(rotatedCornersGlobal[i].y, 1);
+                        const cornerIdx = rotatedCornersGlobal.findIndex((corner, i) => (
+                            !usedCorners.has(i) &&
+                            Math.abs(p.x - corner.x) <= 1 &&
+                            Math.abs(p.y - corner.y) <= 1
+                        ));
+                        expect(
+                            cornerIdx,
+                            `(${p.x}, ${p.y}) is not an unused rotated corner of ` +
+                            `${JSON.stringify(rotatedCornersGlobal)}`,
+                        ).to.not.equal(-1);
+                        usedCorners.add(cornerIdx);
                     });
+                    expect(usedCorners.size, 'each point should snap to its own corner').to.equal(3);
+
+                    // Only the middle corner is free. The polygon is drawn between two
+                    // opposite corners, so tl (0) and br (2) are fixed endpoints and must
+                    // both be present; autoborder then fills in either tr (1) or bl (3).
+                    // Without pinning the endpoints, a {tr, br, bl} result would satisfy
+                    // the set check above while tl had gone missing.
+                    const [TL, TR, BR, BL] = [0, 1, 2, 3];
+                    expect(usedCorners.has(TL), 'the tl endpoint should be snapped').to.equal(true);
+                    expect(usedCorners.has(BR), 'the br endpoint should be snapped').to.equal(true);
+                    expect(
+                        [TR, BL].filter((i) => usedCorners.has(i)),
+                        'exactly one of the two equal-length autoborder paths should be taken',
+                    ).to.have.length(1);
                 });
             });
 

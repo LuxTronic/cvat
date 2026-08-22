@@ -8,6 +8,9 @@ import { taskName, labelName } from '../../support/const';
 import { getShapeCoord } from '../../support/utils.cy';
 import { translatePoint } from '../../support/utils';
 
+const EXPECTED_JOIN_ERROR =
+    'Cannot join: not enough valid polygons (need at least 2 non-self-intersecting polygons)';
+
 context('Join polygons feature', { scrollBehavior: false }, () => {
     /**
      * Joins multiple polygon shapes together
@@ -18,7 +21,24 @@ context('Join polygons feature', { scrollBehavior: false }, () => {
         cy.get('.cvat-join-control').should('exist').and('be.visible').click();
         cy.get('.cvat-join-control').should('have.class', 'cvat-active-canvas-control');
         for (const shape of shapes) {
-            cy.get(shape.objectId).click(shape.position); // non-overlapping shape parts
+            if (shape.fraction) {
+                // A position keyword is a point on the bounding box, which is not
+                // necessarily on the shape. Click a fraction of the box instead, so a
+                // concave or self-intersecting outline can name a point inside itself.
+                const [fx, fy] = shape.fraction;
+                cy.get(shape.objectId).then(($el) => {
+                    const { width, height } = $el[0].getBoundingClientRect();
+                    cy.wrap($el).click(width * fx, height * fy);
+                });
+            } else {
+                cy.get(shape.objectId).click(shape.position); // non-overlapping shape parts
+            }
+            // A click that misses the shape lands on empty canvas and clears the whole
+            // selection, so `j` then does nothing at all: no join, no error, no
+            // notification. The test used to sit waiting on a notification that was
+            // never coming, fail, and wedge the shard. Fail here instead, where the
+            // cause is legible.
+            cy.get(shape.objectId).should('have.class', 'cvat_canvas_shape_selection');
         }
         cy.realPress('j');
     }
@@ -125,16 +145,23 @@ context('Join polygons feature', { scrollBehavior: false }, () => {
     });
 
     it('Joining a self-intersected polygon throws an exception', () => {
-        cy.once('uncaught:exception', (err) => {
-            expect(err.message).to.contain(
-                'Cannot join: not enough valid polygons (need at least 2 non-self-intersecting polygons)',
-            );
-            return false;
+        let caught = null;
+        cy.on('uncaught:exception', (err) => {
+            // Only the expected error is suppressed; anything else still fails the test,
+            // and cannot overwrite the error this test is about.
+            if (err.message.includes(EXPECTED_JOIN_ERROR)) {
+                caught = err;
+                return false;
+            }
+            return true;
         });
         cy.createPolygon(selfIntersectingPolygonPoints);
         joinShapes([
             { objectId: '#cvat_canvas_shape_1', position: 'top' },
-            { objectId: '#cvat_canvas_shape_2', position: 'right' },
+            // The self-intersecting outline is a bowtie: two lobes meeting at the
+            // centre, so the bounding box's right edge midpoint is on the boundary
+            // rather than inside. 85% across, halfway down is inside the right lobe.
+            { objectId: '#cvat_canvas_shape_2', fraction: [0.85, 0.5] },
         ]);
         cy.get('.cvat-notification-notice-canvas-error-occurred')
             .should('exist').and('be.visible');
@@ -145,5 +172,9 @@ context('Join polygons feature', { scrollBehavior: false }, () => {
         cy.closeNotification('.cvat-notification-warning-canvas');
         cy.get('#cvat_canvas_shape_1').should('exist');
         cy.get('#cvat_canvas_shape_2').should('exist');
+        cy.then(() => {
+            expect(caught, 'expected the join to raise an uncaught exception').to.not.be.null;
+            expect(caught.message).to.contain(EXPECTED_JOIN_ERROR);
+        });
     });
 });
