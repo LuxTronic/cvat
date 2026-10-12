@@ -70,7 +70,7 @@ interface StateToProps {
     interactors: MLModel[];
     detectors: MLModel[];
     trackers: MLModel[];
-    curZOrder: number;
+    currentZOrder: number;
     defaultApproxPolyAccuracy: number;
     toolsBlockerState: ToolsBlockerState;
     frameData: { width: number; height: number; deleted?: boolean };
@@ -101,7 +101,7 @@ function mapStateToProps(state: CombinedState): StateToProps {
                 frame: { number: frame, data: frameData },
             },
             annotations: {
-                zLayer: { cur: curZOrder },
+                zLayer: { cur: currentZOrder },
                 states,
             },
             drawing: { activeLabelID },
@@ -134,7 +134,7 @@ function mapStateToProps(state: CombinedState): StateToProps {
         canvasInstance: canvasInstance as Canvas,
         jobInstance: jobInstance as Job,
         frame,
-        curZOrder,
+        currentZOrder,
         defaultApproxPolyAccuracy,
         toolsBlockerState,
         frameData,
@@ -631,7 +631,7 @@ export class ToolsControlComponent extends React.PureComponent<Props, State> {
     private onTracking = async (e: Event): Promise<void> => {
         const { trackedShapes, activeTracker, activeLabelID } = this.state;
         const {
-            isActivated, jobInstance, frame, curZOrder, fetchAnnotations,
+            isActivated, jobInstance, frame, currentZOrder, fetchAnnotations,
         } = this.props;
 
         if (!isActivated || !activeLabelID || !activeTracker) {
@@ -656,7 +656,7 @@ export class ToolsControlComponent extends React.PureComponent<Props, State> {
                     shapeType: ShapeType.RECTANGLE,
                     objectType: ObjectType.TRACK,
                     source: core.enums.Source.SEMI_AUTO,
-                    zOrder: curZOrder,
+                    zOrder: currentZOrder,
                     label,
                     points,
                     frame,
@@ -1176,7 +1176,7 @@ export class ToolsControlComponent extends React.PureComponent<Props, State> {
     private async constructFromLatestResponse(): Promise<void> {
         const { convertMasksToPolygons, thresholdValue } = this.state;
         const {
-            frame, labels, curZOrder, activeLabelID, createAnnotations,
+            frame, labels, currentZOrder, activeLabelID, createAnnotations,
         } = this.props;
 
         if (!this.interaction.latestResponse.length) {
@@ -1189,7 +1189,7 @@ export class ToolsControlComponent extends React.PureComponent<Props, State> {
             source: core.enums.Source.SEMI_AUTO,
             label: labels.find((label) => label.id === activeLabelID as number) as Label,
             occluded: false,
-            zOrder: curZOrder,
+            zOrder: currentZOrder,
         };
 
         const objectsToConstruct = this.interaction.latestResponse.filter(
@@ -1512,7 +1512,7 @@ export class ToolsControlComponent extends React.PureComponent<Props, State> {
 
     private renderDetectorBlock(): JSX.Element {
         const {
-            jobInstance, detectors, curZOrder, frame, labels, frameData,
+            jobInstance, detectors, currentZOrder, frame, labels, frameData,
             createAnnotations,
         } = this.props;
 
@@ -1600,7 +1600,7 @@ export class ToolsControlComponent extends React.PureComponent<Props, State> {
                                 rotation: shape.rotation,
                                 shapeType: shape.type,
                                 source: core.enums.Source.AUTO,
-                                zOrder: curZOrder,
+                                zOrder: currentZOrder,
                             });
                         });
 

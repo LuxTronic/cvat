@@ -29,7 +29,9 @@ import {
     undoActionAsync,
 } from 'actions/annotation-actions';
 import AnnotationTopBarComponent from 'components/annotation-page/top-bar/top-bar';
-import { Canvas } from 'cvat-canvas-wrapper';
+import {
+    Canvas, CanvasMode, RectDrawingMethod, CanvasHistorySource,
+} from 'cvat-canvas-wrapper';
 import { Canvas3d } from 'cvat-canvas3d-wrapper';
 import { FramesMetaData, Job } from 'cvat-core-wrapper';
 import {
@@ -60,6 +62,9 @@ interface StateToProps {
     canvasIsReady: boolean;
     undoAction?: string;
     redoAction?: string;
+    canvasUndoAction?: string;
+    canvasRedoAction?: string;
+    canvasHistorySource?: CanvasHistorySource;
     autoSave: boolean;
     autoSaveInterval: number;
     toolsBlockerState: ToolsBlockerState;
@@ -71,6 +76,7 @@ interface StateToProps {
     forceExit: boolean;
     ranges: string;
     activeControl: ActiveControl;
+    rectDrawingMethod?: RectDrawingMethod;
     annotationFilters: object[];
     initialOpenGuide: boolean;
     navigationType: NavigationType;
@@ -131,7 +137,17 @@ function mapStateToProps(state: CombinedState): StateToProps {
                 filters: annotationFilters,
             },
             job: { instance: jobInstance, queryParameters: { initialOpenGuide }, meta },
-            canvas: { ready: canvasIsReady, instance: canvasInstance, activeControl },
+            canvas: {
+                ready: canvasIsReady,
+                instance: canvasInstance,
+                activeControl,
+                history: {
+                    source: canvasHistorySource,
+                    undoAction: canvasUndoAction,
+                    redoAction: canvasRedoAction,
+                },
+            },
+            drawing: { activeRectDrawingMethod: rectDrawingMethod },
             workspace,
         },
         settings: {
@@ -171,6 +187,9 @@ function mapStateToProps(state: CombinedState): StateToProps {
         jobInstance: jobInstance as Job,
         undoAction: history.undo.length ? history.undo[history.undo.length - 1][0] : undefined,
         redoAction: history.redo.length ? history.redo[history.redo.length - 1][0] : undefined,
+        canvasUndoAction,
+        canvasRedoAction,
+        canvasHistorySource,
         autoSave,
         autoSaveInterval,
         toolsBlockerState,
@@ -181,6 +200,7 @@ function mapStateToProps(state: CombinedState): StateToProps {
         canvasInstance: canvasInstance as NonNullable<typeof canvasInstance>,
         forceExit,
         activeControl,
+        rectDrawingMethod,
         ranges,
         annotationFilters,
         initialOpenGuide,
@@ -261,6 +281,7 @@ function mapDispatchToProps(dispatch: any): DispatchToProps {
 }
 
 type Props = StateToProps & DispatchToProps & RouteComponentProps;
+
 class AnnotationTopBarContainer extends React.PureComponent<Props> {
     private inputFrameRef: React.RefObject<HTMLInputElement>;
     private autoSaveInterval: number | undefined;
@@ -373,7 +394,13 @@ class AnnotationTopBarContainer extends React.PureComponent<Props> {
     }
 
     private undo = (): void => {
-        const { undo, undoAction } = this.props;
+        const { undo, undoAction, canvasInstance } = this.props;
+
+        if (canvasInstance instanceof Canvas) {
+            if (canvasInstance.undo() || ![CanvasMode.IDLE, CanvasMode.SELECT].includes(canvasInstance.mode())) {
+                return;
+            }
+        }
 
         if (isAbleToChangeFrame() && undoAction) {
             undo();
@@ -381,7 +408,13 @@ class AnnotationTopBarContainer extends React.PureComponent<Props> {
     };
 
     private redo = (): void => {
-        const { redo, redoAction } = this.props;
+        const { redo, redoAction, canvasInstance } = this.props;
+
+        if (canvasInstance instanceof Canvas) {
+            if (canvasInstance.redo() || ![CanvasMode.IDLE, CanvasMode.SELECT].includes(canvasInstance.mode())) {
+                return;
+            }
+        }
 
         if (isAbleToChangeFrame() && redoAction) {
             redo();
@@ -722,11 +755,15 @@ class AnnotationTopBarContainer extends React.PureComponent<Props> {
             frameIsDeleted,
             undoAction,
             redoAction,
+            canvasUndoAction,
+            canvasRedoAction,
+            canvasHistorySource,
             workspace,
             keyMap,
             ranges,
             normalizedKeyMap,
             activeControl,
+            rectDrawingMethod,
             annotationFilters,
             initialOpenGuide,
             toolsBlockerState,
@@ -737,6 +774,14 @@ class AnnotationTopBarContainer extends React.PureComponent<Props> {
             showSearchFrameByName,
         } = this.props;
         const { lastSavedAt } = this.state;
+        const maskHistoryMode = [ActiveControl.DRAW_MASK, ActiveControl.EDIT].includes(activeControl);
+        const maskHistory = canvasHistorySource === CanvasHistorySource.MASK;
+        let availableUndoAction = maskHistoryMode ? undefined : undoAction;
+        let availableRedoAction = maskHistoryMode ? undefined : redoAction;
+        if (maskHistoryMode && maskHistory) {
+            availableUndoAction = canvasUndoAction;
+            availableRedoAction = canvasRedoAction;
+        }
 
         return (
             <AnnotationTopBarComponent
@@ -778,8 +823,8 @@ class AnnotationTopBarContainer extends React.PureComponent<Props> {
                 frameFilename={frameFilename}
                 frameDeleted={frameIsDeleted}
                 inputFrameRef={this.inputFrameRef}
-                undoAction={undoAction}
-                redoAction={redoAction}
+                undoAction={availableUndoAction}
+                redoAction={availableRedoAction}
                 undoShortcut={normalizedKeyMap.UNDO}
                 redoShortcut={normalizedKeyMap.REDO}
                 drawShortcut={normalizedKeyMap.SWITCH_DRAW_MODE_STANDARD_CONTROLS}
@@ -802,6 +847,7 @@ class AnnotationTopBarContainer extends React.PureComponent<Props> {
                 toolsBlockerState={toolsBlockerState}
                 jobInstance={jobInstance}
                 activeControl={activeControl}
+                rectDrawingMethod={rectDrawingMethod}
             />
         );
     }

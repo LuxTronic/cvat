@@ -150,7 +150,7 @@ services:
     environment:
       <<: *backend-env
       NUMPROCS: 2
-    command: run worker import
+    command: run worker import --with-scheduler
     volumes:
       - cvat_data:/home/django/data
       - cvat_keys:/home/django/keys
@@ -167,7 +167,7 @@ services:
     environment:
       <<: [*backend-env, *clickhouse-env]
       NUMPROCS: 2
-    command: run worker export
+    command: run worker export --with-scheduler
     volumes:
       - cvat_data:/home/django/data
       - cvat_keys:/home/django/keys
