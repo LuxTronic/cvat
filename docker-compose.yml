@@ -257,27 +257,21 @@ services:
       - cvat
 
   # Opt-in: `docker compose --profile lux-ml up`. Kept out of the default
-  # stack because these need an NVIDIA runtime, and because the Python test
-  # harness builds its stack from this file.
+  # stack because the Python test harness builds its stack from this file.
+  # This service is the CPU sidecar. It does not use the NVIDIA runtime.
   yolov7:
     profiles: [lux-ml]
     container_name: yolov7
     build: ./yolov7
     restart: always
-    user: '1000:1000'
-    runtime: nvidia
-    ipc: host
-    environment:
-      NVIDIA_VISIBLE_DEVICES: all
-      NVIDIA_DRIVER_CAPABILITIES: compute,utility
     volumes:
       - cvat_models:/models
     networks:
       - cvat
 
   # Opt-in: `docker compose --profile lux-ml up`. Kept out of the default
-  # stack because these need an NVIDIA runtime, and because the Python test
-  # harness builds its stack from this file.
+  # stack because this service needs an NVIDIA runtime, and because the
+  # Python test harness builds its stack from this file.
   yolov8-cls:
     profiles: [lux-ml]
     container_name: yolov8-cls
