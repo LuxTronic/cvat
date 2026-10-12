@@ -8,7 +8,7 @@ import { Col, Row } from 'antd/lib/grid';
 import { Workspace } from 'reducers';
 import { Job } from 'cvat-core-wrapper';
 import { KeyMap } from 'utils/mousetrap-react';
-import { AudioSeekIntent } from 'actions/audio-actions';
+import type { AudioSeekRequest } from 'actions/audio-actions';
 
 import hasUnsavedChanges from 'utils/unsaved-changes';
 
@@ -25,6 +25,11 @@ interface Props {
     workspace: Workspace;
     undoShortcut: string;
     redoShortcut: string;
+    playPauseShortcut: string;
+    backwardShortcut: string;
+    forwardShortcut: string;
+    fastBackwardShortcut: string;
+    fastForwardShortcut: string;
     keyMap: KeyMap;
     jobInstance: Job;
     audioDuration: number;
@@ -36,7 +41,7 @@ interface Props {
     onUndoClick(): void;
     onRedoClick(): void;
     onAudioPlayPause(): void;
-    onAudioSeek(intent: AudioSeekIntent): void;
+    onAudioSeek(request: AudioSeekRequest): void;
 }
 
 export default function AudioTopBarComponent(props: Props): JSX.Element {
@@ -49,6 +54,11 @@ export default function AudioTopBarComponent(props: Props): JSX.Element {
         workspace,
         undoShortcut,
         redoShortcut,
+        playPauseShortcut,
+        backwardShortcut,
+        forwardShortcut,
+        fastBackwardShortcut,
+        fastForwardShortcut,
         jobInstance,
         keyMap,
         audioDuration,
@@ -84,6 +94,11 @@ export default function AudioTopBarComponent(props: Props): JSX.Element {
                         duration={audioDuration}
                         workspace={workspace}
                         keyMap={keyMap}
+                        playPauseShortcut={playPauseShortcut}
+                        backwardShortcut={backwardShortcut}
+                        forwardShortcut={forwardShortcut}
+                        fastBackwardShortcut={fastBackwardShortcut}
+                        fastForwardShortcut={fastForwardShortcut}
                         onPlayPause={onAudioPlayPause}
                         onSeek={onAudioSeek}
                     />

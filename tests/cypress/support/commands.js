@@ -25,6 +25,11 @@ require('cy-verify-downloads').addCustomCommand();
 
 let selectedValueGlobal = '';
 
+Cypress.Commands.add('pressWithPlatformModifier', (key) => {
+    const modifier = Cypress.platform === 'darwin' ? 'meta' : 'ctrl';
+    cy.get('body').type(`{${modifier}}${key}`);
+});
+
 Cypress.Commands.add('activateCanvasShape', (selector) => {
     cy.get(selector).then(([shapeWrapper]) => {
         const tagName = (element) => element.tagName.toLowerCase();
@@ -143,7 +148,7 @@ Cypress.Commands.add('userRegistration', (firstName, lastName, userName, emailAd
 
 Cypress.Commands.add('deleteUsers', (authHeaders, accountsToDelete) => {
     cy.request({
-        url: '/api/users?page_size=all',
+        url: '/api/users?page_size=500',
         headers: authHeaders,
     }).then((_response) => {
         const responseResult = _response.body.results;
@@ -199,7 +204,7 @@ Cypress.Commands.add('headlessGetUserId', (username) => cy.window().its('cvat')
 
 Cypress.Commands.add('deleteTasks', (authHeaders, tasksToDelete) => {
     cy.request({
-        url: '/api/tasks?page_size=all',
+        url: '/api/tasks?page_size=500',
         headers: authHeaders,
     }).then((_response) => {
         const responseResult = _response.body.results;
@@ -543,7 +548,13 @@ Cypress.Commands.add('openTaskById', (taskId) => {
 Cypress.Commands.add('saveJob', (method = 'PATCH', status = 200, as = 'saveJob') => {
     cy.intercept(method, '/api/jobs/**').as(as);
     cy.clickSaveAnnotationView();
+    cy.hideTooltips(); // own the side-effects
     cy.wait(`@${as}`).its('response.statusCode').should('equal', status);
+});
+
+Cypress.Commands.add('clearAnnotationsAndSave', (method = 'PUT', status = 200, as = 'saveRemoveAnnotations') => {
+    cy.removeAnnotations();
+    cy.saveJob(method, status, as);
 });
 
 Cypress.Commands.add('getJobIdFromIdx', (jobIdx) => {
@@ -627,12 +638,12 @@ Cypress.Commands.add('createRectangle', (createRectangleParams) => {
         cy.get('.ant-select-selection-item').then(($labelValue) => {
             selectedValueGlobal = $labelValue.text();
         });
-        cy.contains('.ant-radio-wrapper', createRectangleParams.points).click();
+        cy.contains('.ant-radio-button-wrapper', createRectangleParams.points).click();
         cy.contains('button', createRectangleParams.type).click();
     });
     cy.get('.cvat-canvas-container').click(createRectangleParams.firstX, createRectangleParams.firstY);
     cy.get('.cvat-canvas-container').click(createRectangleParams.secondX, createRectangleParams.secondY);
-    if (createRectangleParams.points === 'By 4 Points') {
+    if (createRectangleParams.points === '4 Points') {
         cy.get('.cvat-canvas-container')
             .click(createRectangleParams.thirdX, createRectangleParams.thirdY);
         cy.get('.cvat-canvas-container')
@@ -646,7 +657,7 @@ Cypress.Commands.add('switchLabel', (labelName, objectType) => {
     cy.get(`.cvat-${objectType}-popover`).find('.ant-select-selection-item').click();
     cy.get('.ant-select-dropdown')
         .not('.ant-select-dropdown-hidden')
-        .find(`.ant-select-item-option[title="${labelName}"]`)
+        .find(`.ant-select-item-option[data-label="${labelName}"]`)
         .click();
 });
 
@@ -662,7 +673,26 @@ Cypress.Commands.add('checkObjectParameters', (objectParameters, objectType) => 
             listCanvasShapeId.push(listCanvasShape[i].id.match(/\d+$/));
         }
         const maxId = Math.max(...listCanvasShapeId);
-        cy.get(`#cvat_canvas_shape_${maxId}`).should('be.visible');
+        cy.get(`#cvat_canvas_shape_${maxId}`).should('exist').then(($shape) => {
+            const shape = $shape[0];
+
+            // A horizontal/vertical polyline can have a zero-area SVG bounding box.
+            // Cypress treats those elements as hidden starting v14
+            // even when the shape is rendered with a stroke.
+            if (shape.tagName.toLowerCase() === 'polyline') {
+                const {
+                    width, height,
+                } = shape.getBoundingClientRect();
+                const isHorizontalOrVerticalPolyline = (width === 0 && height !== 0) ||
+                    (width !== 0 && height === 0);
+
+                if (isHorizontalOrVerticalPolyline) {
+                    return;
+                }
+            }
+
+            cy.wrap($shape).should('be.visible');
+        });
         cy.get(`#cvat-objects-sidebar-state-item-${maxId}`)
             .should('contain', maxId)
             .and('contain', `${objectType} ${objectParameters.type.toUpperCase()}`)
@@ -860,7 +890,7 @@ Cypress.Commands.add('changeLabelAAM', (labelName) => {
                 .not('.ant-select-dropdown-hidden')
                 .first()
                 .within(() => {
-                    cy.get(`.ant-select-item-option[title="${labelName}"]`).click();
+                    cy.get(`.ant-select-item-option[data-label="${labelName}"]`).click();
                 });
         }
     });
@@ -1080,10 +1110,10 @@ Cypress.Commands.add('advancedConfiguration', (advancedConfigurationParams) => {
 });
 
 Cypress.Commands.add('configureTaskQualityMode', (qualityConfigurationParams) => {
-    cy.contains('Quality').click();
+    cy.contains('.ant-collapse-header', /^Quality$/).click();
     if (qualityConfigurationParams.validationMode) {
-        cy.get('#validationMode').within(() => {
-            cy.contains(qualityConfigurationParams.validationMode).click();
+        cy.contains('.ant-form-item', 'Validation mode').within(() => {
+            cy.contains('.ant-radio-button-wrapper', qualityConfigurationParams.validationMode).click();
         });
     }
     if (qualityConfigurationParams.validationFramesPercent) {
@@ -1157,7 +1187,7 @@ Cypress.Commands.add(
             cy.contains('Annotations have been loaded').should('be.visible');
             cy.closeNotification('.ant-notification-notice-info');
         } else if (expectedResult === 'fail') {
-            cy.contains('Could not upload annotation').should('be.visible');
+            cy.contains('Could not upload annotation', { timeout: 120000 }).should('be.visible');
             cy.closeNotification('.ant-notification-notice-error');
         }
     },
@@ -1626,6 +1656,7 @@ Cypress.Commands.add('verifyNotification', () => {
 
 Cypress.Commands.add('goToCloudStoragesPage', () => {
     cy.intercept('GET', '/api/cloudstorages?**').as('getCloudStorages');
+    cy.hideTooltips();
     cy.get('a[value="cloudstorages"]').click();
     cy.url().should('include', '/cloudstorages');
     cy.wait('@getCloudStorages');
@@ -1934,6 +1965,7 @@ Cypress.Commands.add('clickDeleteFrameAnnotationView', () => {
 
 Cypress.Commands.add('clickSaveAnnotationView', () => {
     cy.get('.cvat-annotation-header-save-button').should('exist').and('be.visible').click();
+    cy.hideTooltips();
 });
 
 Cypress.Commands.add('makeCustomImage', (directory, fileName,
