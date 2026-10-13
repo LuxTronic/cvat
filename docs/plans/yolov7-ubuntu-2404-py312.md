@@ -42,6 +42,7 @@ tree:
 The server runs as uid 1000, the same identity `yolov8-cls` uses.
 The entrypoint starts as root, gives `/models` to that user, then drops privileges.
 That updates a volume left by a root sidecar, and a new empty volume is writable.
+The compose service keeps `ipc: host` so `/train` DataLoader workers fit in shared memory.
 `USE_HALF` stays tied to CUDA availability. This image does not turn it on.
 
 The HTTP contract and checkpoint layout stay as they are in `server.py`.

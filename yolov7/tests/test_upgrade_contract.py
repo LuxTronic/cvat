@@ -45,6 +45,14 @@ class UpgradeContractTest(unittest.TestCase):
         self.assertIn("chown -R 1000:1000 /models", entrypoint)
         self.assertIn("setpriv --reuid=1000 --regid=1000 --clear-groups", entrypoint)
 
+    def test_compose_keeps_host_ipc_without_nvidia_runtime(self):
+        compose = (ROOT.parent / "docker-compose.yml").read_text()
+        start = compose.index("  yolov7:\n")
+        end = compose.index("  yolov8-cls:\n")
+        block = compose[start:end]
+        self.assertIn("ipc: host", block)
+        self.assertNotIn("runtime: nvidia", block)
+
     def test_meshgrid_uses_ij_indexing(self):
         mesh_calls = 0
         indexed = 0

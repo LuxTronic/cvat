@@ -261,11 +261,15 @@ services:
   # This service is the CPU sidecar. It does not use the NVIDIA runtime.
   # The entrypoint starts as root so it can chown an existing models volume,
   # then the server runs as uid 1000.
+  # /train starts 8 DataLoader workers. Docker's default 64 MiB /dev/shm is
+  # too small for that, so this service keeps host IPC after the NVIDIA
+  # runtime is removed.
   yolov7:
     profiles: [lux-ml]
     container_name: yolov7
     build: ./yolov7
     restart: always
+    ipc: host
     volumes:
       - cvat_models:/models
     networks:
