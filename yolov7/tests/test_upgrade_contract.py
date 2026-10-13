@@ -44,6 +44,8 @@ class UpgradeContractTest(unittest.TestCase):
         entrypoint = (ROOT / "docker-entrypoint.sh").read_text()
         self.assertIn("chown -R 1000:1000 /models", entrypoint)
         self.assertIn("setpriv --reuid=1000 --regid=1000 --clear-groups", entrypoint)
+        self.assertIn("chown 1000:1000 /models", dockerfile)
+        self.assertNotIn("chown -R 1000:1000 /yolov7", dockerfile)
 
     def test_compose_keeps_host_ipc_without_nvidia_runtime(self):
         compose = (ROOT.parent / "docker-compose.yml").read_text()
