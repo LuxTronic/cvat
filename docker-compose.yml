@@ -259,12 +259,13 @@ services:
   # Opt-in: `docker compose --profile lux-ml up`. Kept out of the default
   # stack because the Python test harness builds its stack from this file.
   # This service is the CPU sidecar. It does not use the NVIDIA runtime.
+  # The entrypoint starts as root so it can chown an existing models volume,
+  # then the server runs as uid 1000.
   yolov7:
     profiles: [lux-ml]
     container_name: yolov7
     build: ./yolov7
     restart: always
-    user: '1000:1000'
     volumes:
       - cvat_models:/models
     networks:

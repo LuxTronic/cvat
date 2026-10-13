@@ -37,9 +37,13 @@ class UpgradeContractTest(unittest.TestCase):
             "0fa1423606133c06362ec716029dade1169d5631e83195b75d8efa66d2ee0b77",
             dockerfile,
         )
-        self.assertIn("USER 1000:1000", dockerfile)
         self.assertIn("HOME=/home/ubuntu", dockerfile)
+        self.assertIn('ENTRYPOINT ["/yolov7/docker-entrypoint.sh"]', dockerfile)
+        self.assertNotIn("USER 1000:1000", dockerfile)
         self.assertNotIn("Root on purpose", dockerfile)
+        entrypoint = (ROOT / "docker-entrypoint.sh").read_text()
+        self.assertIn("chown -R 1000:1000 /models", entrypoint)
+        self.assertIn("setpriv --reuid=1000 --regid=1000 --clear-groups", entrypoint)
 
     def test_meshgrid_uses_ij_indexing(self):
         mesh_calls = 0

@@ -39,8 +39,9 @@ tree:
 | pip | `26.2.1` | Current pip, pinned in the image. |
 | baked weights | `/yolov7/weights/yolov7.pt` | Public yolov7-tiny file. The build checks its size and SHA-256. |
 
-The process runs as uid 1000, the same identity `yolov8-cls` uses.
-`/models` is created owned by that user, so a new empty volume is writable.
+The server runs as uid 1000, the same identity `yolov8-cls` uses.
+The entrypoint starts as root, gives `/models` to that user, then drops privileges.
+That updates a volume left by a root sidecar, and a new empty volume is writable.
 `USE_HALF` stays tied to CUDA availability. This image does not turn it on.
 
 The HTTP contract and checkpoint layout stay as they are in `server.py`.

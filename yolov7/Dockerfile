@@ -40,13 +40,14 @@ COPY . .
 RUN python -c "import hashlib, urllib.request; from pathlib import Path; url='https://github.com/WongKinYiu/yolov7/releases/download/v0.1/yolov7-tiny.pt'; dest=Path('/yolov7/weights/yolov7.pt'); dest.parent.mkdir(parents=True, exist_ok=True); urllib.request.urlretrieve(url, dest); size=dest.stat().st_size; expected_size=12639769; digest=hashlib.sha256(dest.read_bytes()).hexdigest(); expected_digest='0fa1423606133c06362ec716029dade1169d5631e83195b75d8efa66d2ee0b77'; assert size == expected_size, 'yolov7-tiny.pt size %s != %s' % (size, expected_size); assert digest == expected_digest, 'yolov7-tiny.pt sha256 %s != %s' % (digest, expected_digest)"
 
 # uid 1000 is the ubuntu user already in this base image, the same
-# identity yolov8-cls uses. /models is created here so a new empty named
-# volume is owned by that user. Docker leaves HOME=/root unless it is set,
-# and this user cannot write there.
+# identity yolov8-cls uses. /models in the image covers a new empty volume.
+# The entrypoint chowns an existing volume, then drops to uid 1000.
+# Docker leaves HOME=/root unless it is set, and uid 1000 cannot write there.
 RUN mkdir -p /models \
-    && chown -R 1000:1000 /yolov7 /models
+    && chown -R 1000:1000 /yolov7 /models \
+    && chmod 755 /yolov7/docker-entrypoint.sh
 ENV HOME=/home/ubuntu
-USER 1000:1000
+ENTRYPOINT ["/yolov7/docker-entrypoint.sh"]
 
 EXPOSE 8000
 

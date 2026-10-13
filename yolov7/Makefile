@@ -27,6 +27,5 @@ smoke:
 	docker run --rm --platform $(PLATFORM) \
 	  -e PYTHONPATH=/yolov7 \
 	  -w /yolov7 \
-	  --entrypoint python \
 	  -v "$(CURDIR)/tests/smoke_infer.py:/tmp/smoke_infer.py:ro" \
-	  $(IMAGE) /tmp/smoke_infer.py
+	  $(IMAGE) python /tmp/smoke_infer.py
