@@ -37,9 +37,9 @@ tree:
 | torchvision | `0.29.1+cpu` | Matches torch 2.14. |
 | OpenCV | `opencv-python-headless==4.14.0.94` | Newest 4.x wheel with a Python 3.12 build. |
 | pip | `26.2.1` | Current pip, pinned in the image. |
-| baked weights | `/yolov7/weights/yolov7.pt` | Public yolov7-tiny file, size-checked at build. |
+| baked weights | `/yolov7/weights/yolov7.pt` | Public yolov7-tiny file. The build checks its size and SHA-256. |
 
-The image runs as root so it can write the mounted models directory.
+The process runs as uid 1000, the same identity `yolov8-cls` uses. `/models` is created owned by that user, so a new empty volume is writable.
 `USE_HALF` stays tied to CUDA availability. This image does not turn it on.
 
 The HTTP contract and checkpoint layout stay as they are in `server.py`.

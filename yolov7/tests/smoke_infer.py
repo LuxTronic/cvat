@@ -3,7 +3,9 @@
 A gray frame may produce no boxes. That is still a successful call.
 """
 
+import hashlib
 import io
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -20,6 +22,14 @@ def main() -> int:
         return 1
     if WEIGHTS.stat().st_size != 12639769:
         print(f"unexpected baked weight size {WEIGHTS.stat().st_size}", file=sys.stderr)
+        return 1
+    digest = hashlib.sha256(WEIGHTS.read_bytes()).hexdigest()
+    expected = "0fa1423606133c06362ec716029dade1169d5631e83195b75d8efa66d2ee0b77"
+    if digest != expected:
+        print(f"unexpected baked weight sha256 {digest}", file=sys.stderr)
+        return 1
+    if os.geteuid() != 1000:
+        print(f"sidecar is uid {os.geteuid()}, expected 1000", file=sys.stderr)
         return 1
 
     ACTIVE.parent.mkdir(parents=True, exist_ok=True)

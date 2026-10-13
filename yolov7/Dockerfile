@@ -36,11 +36,18 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Public yolov7-tiny weights, stored under the name the trainer already uses.
-# The size check rejects a truncated download.
-RUN python -c "import urllib.request; from pathlib import Path; url='https://github.com/WongKinYiu/yolov7/releases/download/v0.1/yolov7-tiny.pt'; dest=Path('/yolov7/weights/yolov7.pt'); dest.parent.mkdir(parents=True, exist_ok=True); urllib.request.urlretrieve(url, dest); size=dest.stat().st_size; expected=12639769; assert size == expected, 'yolov7-tiny.pt size %s != %s' % (size, expected)"
+# Size and SHA-256 both have to match the v0.1 release asset.
+RUN python -c "import hashlib, urllib.request; from pathlib import Path; url='https://github.com/WongKinYiu/yolov7/releases/download/v0.1/yolov7-tiny.pt'; dest=Path('/yolov7/weights/yolov7.pt'); dest.parent.mkdir(parents=True, exist_ok=True); urllib.request.urlretrieve(url, dest); size=dest.stat().st_size; expected_size=12639769; digest=hashlib.sha256(dest.read_bytes()).hexdigest(); expected_digest='0fa1423606133c06362ec716029dade1169d5631e83195b75d8efa66d2ee0b77'; assert size == expected_size, 'yolov7-tiny.pt size %s != %s' % (size, expected_size); assert digest == expected_digest, 'yolov7-tiny.pt sha256 %s != %s' % (digest, expected_digest)"
+
+# uid 1000 is the ubuntu user already in this base image, the same
+# identity yolov8-cls uses. /models is created here so a new empty named
+# volume is owned by that user. Docker leaves HOME=/root unless it is set,
+# and this user cannot write there.
+RUN mkdir -p /models \
+    && chown -R 1000:1000 /yolov7 /models
+ENV HOME=/home/ubuntu
+USER 1000:1000
 
 EXPOSE 8000
 
-# Root on purpose. The models directory is a mounted volume, and a non-root
-# user cannot write a cached model there when that volume is root-owned.
 CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -33,6 +33,13 @@ class UpgradeContractTest(unittest.TestCase):
         self.assertIn("opencv-python-headless==4.14.0.94", requirements)
         self.assertNotIn("numpy>=1.18.5,<1.24.0", requirements)
         self.assertNotIn("opencv-python-headless==4.5.5.64", requirements)
+        self.assertIn(
+            "0fa1423606133c06362ec716029dade1169d5631e83195b75d8efa66d2ee0b77",
+            dockerfile,
+        )
+        self.assertIn("USER 1000:1000", dockerfile)
+        self.assertIn("HOME=/home/ubuntu", dockerfile)
+        self.assertNotIn("Root on purpose", dockerfile)
 
     def test_meshgrid_uses_ij_indexing(self):
         mesh_calls = 0
