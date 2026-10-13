@@ -115,8 +115,9 @@ ARG USER="django"
 ARG CVAT_CONFIGURATION="production"
 ENV DJANGO_SETTINGS_MODULE="cvat.settings.${CVAT_CONFIGURATION}"
 
-# Install necessary apt packages
+# Upgrade the base image's packages and install necessary apt packages
 RUN apt-get -o Acquire::Retries=5 update && \
+    DEBIAN_FRONTEND=noninteractive apt-get upgrade -yq && \
     DEBIAN_FRONTEND=noninteractive apt-get --no-install-recommends install -yq \
         adduser \
         bzip2 \
