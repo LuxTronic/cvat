@@ -67,16 +67,24 @@ class UpgradeContractTest(unittest.TestCase):
     def test_checkpoints_load_with_weights_only_false(self):
         pattern = re.compile(r"torch\.load\(")
         for path in _python_files():
-            for lineno, line in enumerate(path.read_text().splitlines(), start=1):
-                if not pattern.search(line):
+            lines = path.read_text().splitlines()
+            index = 0
+            while index < len(lines):
+                line = lines[index]
+                if not pattern.search(line) or "path/to/model.pt" in line:
+                    index += 1
                     continue
-                if "path/to/model.pt" in line:
-                    continue
+                call = line
+                start = index + 1
+                while call.count("(") > call.count(")") and index + 1 < len(lines):
+                    index += 1
+                    call += "\n" + lines[index]
                 self.assertIn(
                     "weights_only=False",
-                    line,
-                    f"{path.relative_to(ROOT)}:{lineno}",
+                    call,
+                    f"{path.relative_to(ROOT)}:{start}",
                 )
+                index += 1
 
     def test_numpy_int_alias_is_gone(self):
         for path in _python_files():
