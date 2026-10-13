@@ -85,10 +85,14 @@ RUN --mount=type=cache,target=/root/.cache/pip/http-v2 \
     -r /tmp/cvat/requirements/${CVAT_CONFIGURATION}.txt \
     -w /tmp/wheelhouse
 
-FROM golang:1.26.5 AS build-smokescreen
+FROM golang:1.27.2 AS build-smokescreen
 
 RUN git clone --filter=blob:none --no-checkout https://github.com/stripe/smokescreen.git
-RUN cd smokescreen && git checkout eb1ac09 && go build -o /tmp/smokescreen
+# eb1ac09 pins x/net, x/text and logrus versions with known vulnerabilities
+RUN cd smokescreen && git checkout eb1ac09 && \
+    go get golang.org/x/net@v0.61.0 golang.org/x/text@v0.43.0 github.com/sirupsen/logrus@v1.10.1 && \
+    go mod tidy && go mod vendor && \
+    go build -o /tmp/smokescreen
 
 FROM ${BASE_IMAGE}
 
@@ -111,8 +115,9 @@ ARG USER="django"
 ARG CVAT_CONFIGURATION="production"
 ENV DJANGO_SETTINGS_MODULE="cvat.settings.${CVAT_CONFIGURATION}"
 
-# Install necessary apt packages
+# Upgrade the base image's packages and install necessary apt packages
 RUN apt-get -o Acquire::Retries=5 update && \
+    DEBIAN_FRONTEND=noninteractive apt-get upgrade -yq && \
     DEBIAN_FRONTEND=noninteractive apt-get --no-install-recommends install -yq \
         adduser \
         bzip2 \
@@ -188,7 +193,14 @@ RUN python -m pip uninstall -y pip
 
 # Install and initialize CVAT, copy all necessary files
 COPY cvat/nginx.conf /etc/nginx/nginx.conf
+# Requirements manifests are build inputs, and the DICOM converter is a standalone script.
+# Leave out the ones production does not install, so scanners do not report packages
+# that are not in the image.
 COPY --parents \
+    --exclude=cvat/requirements/all.* \
+    --exclude=cvat/requirements/development.* \
+    --exclude=cvat/requirements/testing.* \
+    --exclude=utils/dicom_converter \
     backend_entrypoint.d cvat supervisord utils \
     backend_entrypoint.sh \
     components/analytics/clickhouse/init.py \

@@ -17,6 +17,7 @@ labels/
 __pycache__/
 *.pyc
 *.pyo
+tests/
 
 # Virtual environments
 venv/

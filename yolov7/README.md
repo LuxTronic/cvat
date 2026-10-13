@@ -1,3 +1,19 @@
+# LuxTronic sidecar
+
+This directory builds the YOLOv7 sidecar image: Ubuntu 24.04, Python 3.12,
+and a CPU torch wheel. From the repository root:
+
+```bash
+make lint
+make test
+make build
+```
+
+`make test` builds the image and calls `/health`, `/infer`, and `/train`.
+The plan, including what this round does not deploy, is
+[`docs/plans/yolov7-ubuntu-2404-py312.md`](../docs/plans/yolov7-ubuntu-2404-py312.md).
+The upstream YOLOv7 readme follows.
+
 # Official YOLOv7
 
 Implementation of paper - [YOLOv7: Trainable bag-of-freebies sets new state-of-the-art for real-time object detectors](https://arxiv.org/abs/2207.02696)
