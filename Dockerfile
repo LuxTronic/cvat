@@ -193,7 +193,14 @@ RUN python -m pip uninstall -y pip
 
 # Install and initialize CVAT, copy all necessary files
 COPY cvat/nginx.conf /etc/nginx/nginx.conf
+# Requirements manifests are build inputs, and the DICOM converter is a standalone script.
+# Leave out the ones production does not install, so scanners do not report packages
+# that are not in the image.
 COPY --parents \
+    --exclude=cvat/requirements/all.* \
+    --exclude=cvat/requirements/development.* \
+    --exclude=cvat/requirements/testing.* \
+    --exclude=utils/dicom_converter \
     backend_entrypoint.d cvat supervisord utils \
     backend_entrypoint.sh \
     components/analytics/clickhouse/init.py \
