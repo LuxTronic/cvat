@@ -87,6 +87,8 @@ class UpgradeContractTest(unittest.TestCase):
                     f"{path.relative_to(ROOT)}:{start}",
                 )
                 index += 1
+        datasets = (ROOT / "utils" / "datasets.py").read_text()
+        self.assertNotIn("torch.load(cache_path", datasets)
 
     def test_numpy_int_alias_is_gone(self):
         for path in _python_files():

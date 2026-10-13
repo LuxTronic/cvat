@@ -52,7 +52,8 @@ Do not change the detector architecture.
 
 - [x] Replace the Dockerfile base and pin the CPU stack above.
 - [x] Pass `indexing="ij"` at every `torch.meshgrid` call.
-- [x] Pass `weights_only=False` at every `torch.load` of a checkpoint or cache.
+- [x] Pass `weights_only=False` at every `torch.load` of a checkpoint.
+- [x] Rebuild the label cache from the label text. Do not load an uploaded `labels.cache`.
 - [x] Replace `np.int` with `np.int64`.
 - [x] Build empty training targets on `targets.device` instead of `cuda:0`.
 - [x] Add `make help`, `make lint`, `make test`, and `make build`.
