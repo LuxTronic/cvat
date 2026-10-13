@@ -1,48 +1,30 @@
-# Usage: pip install -r requirements.txt
+# Sidecar runtime for Ubuntu 24.04 / Python 3.12.
+# Torch CPU wheels are not on PyPI. The +cpu suffix keeps pip from
+# replacing them with the CUDA Linux wheel.
+--extra-index-url https://download.pytorch.org/whl/cpu
 
-# Base ----------------------------------------
-matplotlib>=3.2.2
-numpy>=1.18.5,<1.24.0
-Pillow>=7.1.2
-PyYAML>=5.3.1
-requests>=2.23.0
-scipy>=1.4.1
-torch>=1.7.0,!=1.12.0
-torchvision>=0.8.1,!=0.13.0
-tqdm>=4.41.0
-protobuf<4.21.3
-fastapi
-uvicorn[standard]
-python-multipart
-opencv-python-headless==4.5.5.64
-numpy
-Pillow
-PyYAML
-tqdm
-redis
-boto3
+torch==2.14.1+cpu
+torchvision==0.29.1+cpu
 
-# Logging -------------------------------------
-tensorboard>=2.4.1
-# wandb
+numpy>=2.0,<2.4
+Pillow>=10.4
+PyYAML>=6.0.2
+requests>=2.32
+scipy>=1.13
+tqdm>=4.66
+protobuf>=4.25.3,<7
+fastapi>=0.115
+uvicorn[standard]>=0.32
+python-multipart>=0.0.18
+opencv-python-headless==4.14.0.94
+redis>=5.2
+boto3>=1.35
+httpx>=0.27
 
-# Plotting ------------------------------------
-pandas>=1.1.4
-seaborn>=0.11.0
-
-# Export --------------------------------------
-# coremltools>=4.1  # CoreML export
-# onnx>=1.9.0  # ONNX export
-# onnx-simplifier>=0.3.6  # ONNX simplifier
-# scikit-learn==0.19.2  # CoreML quantization
-# tensorflow>=2.4.1  # TFLite export
-# tensorflowjs>=3.9.0  # TF.js export
-# openvino-dev  # OpenVINO export
-
-# Extras --------------------------------------
-ipython  # interactive notebook
-psutil  # system utilization
-thop  # FLOPs computation
-# albumentations>=1.0.3
-# pycocotools>=2.0  # COCO mAP
-# roboflow
+# train.py imports these when /train actually runs.
+tensorboard>=2.18
+pandas>=2.2
+seaborn>=0.13
+matplotlib>=3.9
+psutil>=6.0
+thop>=0.1.1
