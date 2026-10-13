@@ -85,10 +85,14 @@ RUN --mount=type=cache,target=/root/.cache/pip/http-v2 \
     -r /tmp/cvat/requirements/${CVAT_CONFIGURATION}.txt \
     -w /tmp/wheelhouse
 
-FROM golang:1.26.5 AS build-smokescreen
+FROM golang:1.27.2 AS build-smokescreen
 
 RUN git clone --filter=blob:none --no-checkout https://github.com/stripe/smokescreen.git
-RUN cd smokescreen && git checkout eb1ac09 && go build -o /tmp/smokescreen
+# eb1ac09 pins x/net, x/text and logrus versions with known vulnerabilities
+RUN cd smokescreen && git checkout eb1ac09 && \
+    go get golang.org/x/net@v0.61.0 golang.org/x/text@v0.43.0 github.com/sirupsen/logrus@v1.10.1 && \
+    go mod tidy && go mod vendor && \
+    go build -o /tmp/smokescreen
 
 FROM ${BASE_IMAGE}
 
