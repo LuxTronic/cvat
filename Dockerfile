@@ -94,6 +94,27 @@ RUN cd smokescreen && git checkout eb1ac09 && \
     go mod tidy && go mod vendor && \
     go build -o /tmp/smokescreen
 
+# Upstream 7-Zip, pinned by version and sha256. Ubuntu 24.04's 7zip 23.01 package has NTFS
+# handler flaws (CVE-2023-52168, CVE-2023-52169) that are fixed upstream in 24.01 and in Ubuntu
+# only through Ubuntu Pro. patool, which extracts uploaded archives, uses 7zzs directly.
+FROM build-image-base AS build-7zip
+
+ARG SEVENZIP_VERSION=26.04
+ARG SEVENZIP_SHA256=fc0327ba27e89bd086cf426dff17d77de582953cdbbc10a6576540a06853ffcd
+
+RUN if [ "$(dpkg --print-architecture)" != "amd64" ]; then \
+        echo "SEVENZIP_SHA256 is for the linux-x64 build only" >&2; exit 1; \
+    fi && \
+    apt-get -o Acquire::Retries=5 update && \
+    DEBIAN_FRONTEND=noninteractive apt-get --no-install-recommends install -yq xz-utils && \
+    rm -rf /var/lib/apt/lists/* && \
+    curl -sSfL -o /tmp/7z.tar.xz \
+        "https://github.com/ip7z/7zip/releases/download/${SEVENZIP_VERSION}/7z${SEVENZIP_VERSION%.*}${SEVENZIP_VERSION#*.}-linux-x64.tar.xz" && \
+    echo "${SEVENZIP_SHA256}  /tmp/7z.tar.xz" > /tmp/7z.tar.xz.sha256 && \
+    sha256sum -c /tmp/7z.tar.xz.sha256 && \
+    mkdir /tmp/7zip && \
+    tar -xJf /tmp/7z.tar.xz -C /tmp/7zip 7zzs License.txt
+
 FROM ${BASE_IMAGE}
 
 ARG http_proxy
@@ -134,7 +155,6 @@ RUN apt-get -o Acquire::Retries=5 update && \
         libxmlsec1 \
         libxmlsec1-openssl \
         nginx \
-        p7zip-full \
         poppler-utils \
         python3 \
         python3-venv \
@@ -148,6 +168,10 @@ RUN apt-get -o Acquire::Retries=5 update && \
 
 # Install smokescreen
 COPY --from=build-smokescreen /tmp/smokescreen /usr/local/bin/smokescreen
+
+# Install upstream 7-Zip in place of Ubuntu's p7zip-full
+COPY --from=build-7zip /tmp/7zip/7zzs /usr/local/bin/7zzs
+COPY --from=build-7zip /tmp/7zip/License.txt /usr/share/doc/7zip-upstream/License.txt
 
 # Add a non-root user
 ENV USER=${USER}
