@@ -191,6 +191,14 @@ RUN if [ "${CVAT_DEBUG_ENABLED}" = 'yes' ]; then \
 # and it was decided to remove pip from the final image
 RUN python -m pip uninstall -y pip
 
+# The venv is built, so python3-venv and the pip and setuptools wheels it bundles are no longer needed.
+# Scanners report the bundled pip wheel as the OS python-pip package, so they leave the final image too.
+RUN DEBIAN_FRONTEND=noninteractive apt-get purge -yq \
+        python3-venv \
+        python3.12-venv \
+        python3-pip-whl \
+        python3-setuptools-whl
+
 # Install and initialize CVAT, copy all necessary files
 COPY cvat/nginx.conf /etc/nginx/nginx.conf
 # Requirements manifests are build inputs, and the DICOM converter is a standalone script.
