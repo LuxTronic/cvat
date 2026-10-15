@@ -3,10 +3,13 @@ FROM cvat/server:local
 ENV DJANGO_SETTINGS_MODULE=cvat.settings.testing
 USER root
 
+# The server image removes python3-venv once its venv is built.
+# Reinstall it here so ensurepip can restore pip for the test requirements.
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get --no-install-recommends install -yq \
         build-essential \
         python3-dev \
+        python3-venv \
         && \
     rm -rf /var/lib/apt/lists/*;
 
