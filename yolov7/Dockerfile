@@ -31,7 +31,11 @@ RUN apt-get update \
 WORKDIR /yolov7
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Once the venv is built, python3.12-venv and the pip and setuptools wheels it
+# pulls in are no longer needed. Scanners report the bundled pip wheel as the
+# OS python-pip package. The venv keeps its own pip.
+RUN pip install --no-cache-dir -r requirements.txt \
+    && apt-get purge -y python3.12-venv python3-pip-whl python3-setuptools-whl
 
 COPY . .
 
