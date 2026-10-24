@@ -31,6 +31,8 @@ class UpgradeContractTest(unittest.TestCase):
         self.assertIn("torch==2.14.1+cpu", requirements)
         self.assertIn("torchvision==0.29.1+cpu", requirements)
         self.assertIn("opencv-python-headless==4.14.0.94", requirements)
+        self.assertIn("Pillow>=13.0.0", requirements)
+        self.assertIn("certifi>=2026.10.19", requirements)
         self.assertNotIn("numpy>=1.18.5,<1.24.0", requirements)
         self.assertNotIn("opencv-python-headless==4.5.5.64", requirements)
         self.assertIn(

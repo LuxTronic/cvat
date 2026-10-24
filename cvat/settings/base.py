@@ -223,6 +223,9 @@ REST_FRAMEWORK = {
     "DEFAULT_METADATA_CLASS": "rest_framework.metadata.SimpleMetadata",
     "DEFAULT_SCHEMA_CLASS": "cvat.apps.iam.schema.CustomAutoSchema",
     "EXCEPTION_HANDLER": "cvat.apps.events.handlers.handle_viewset_exception",
+    # DRF 3.18 reports many=True validation errors as a dict. Keep the list
+    # shape this API already returns. The list shape is removed in 3.20.
+    "LIST_SERIALIZER_ERRORS_AS_DICT": False,
 }
 
 

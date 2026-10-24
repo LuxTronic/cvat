@@ -107,7 +107,9 @@ ARG USER="django"
 ARG CVAT_CONFIGURATION="production"
 ENV DJANGO_SETTINGS_MODULE="cvat.settings.${CVAT_CONFIGURATION}"
 
-# Install necessary apt packages
+# Install necessary apt packages.
+# USN-8950-1 ships the fix as libpoppler134 24.02.0-1ubuntu9.11.
+# The upstream version stays 24.02.0, so the Debian revision is the check.
 RUN apt-get -o Acquire::Retries=5 update && \
     DEBIAN_FRONTEND=noninteractive apt-get --no-install-recommends install -yq \
         adduser \
@@ -130,6 +132,7 @@ RUN apt-get -o Acquire::Retries=5 update && \
         tzdata \
         unrar \
         wait-for-it \
+    && dpkg --compare-versions "$(dpkg-query -W -f='${Version}' libpoppler134)" ge "24.02.0-1ubuntu9.11" \
     && ln -fs /usr/share/zoneinfo/${TZ} /etc/localtime && \
     dpkg-reconfigure -f noninteractive tzdata && \
     rm -rf /var/lib/apt/lists/*
