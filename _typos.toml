@@ -24,6 +24,8 @@ default.extend-ignore-re = [
 ]
 
 [default.extend-words]
+# The PyPI package name.
+certifi = "certifi"
 AVOD = "AVOD"
 NAM = "NAM"
 blok = "block"

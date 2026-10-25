@@ -24,7 +24,7 @@ django-health-check>=3.18.1,<4
 django-rq>=2.10.1,<3
 django-sendfile2~=0.7.2
 Django~=5.2.0
-djangorestframework~=3.17
+djangorestframework~=3.18.3
 djangorestframework-api-key~=3.1
 drf-spectacular==0.29.0
 google-cloud-storage~=3.14
@@ -42,7 +42,7 @@ json-stream>=2.5.1,<3
 patool~=4.0
 
 pdf2image==1.14.0
-Pillow>=12.3.0
+Pillow>=13.0.0
 pottery~=3.0
 psutil==7.2.2
 psycopg2-binary~=2.9
@@ -51,6 +51,7 @@ python-logstash-async==4.1.0
 python-rapidjson>=1.20
 redis~=8.1
 requests~=2.34
+certifi>=2026.10.19
 rq-scheduler==0.13.1
 rq==1.16.0
 Shapely~=2.1

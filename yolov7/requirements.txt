@@ -7,7 +7,8 @@ torch==2.14.1+cpu
 torchvision==0.29.1+cpu
 
 numpy>=2.0,<2.4
-Pillow>=10.4
+Pillow>=13.0.0
+certifi>=2026.10.19
 PyYAML>=6.0.2
 requests>=2.32
 scipy>=1.13
