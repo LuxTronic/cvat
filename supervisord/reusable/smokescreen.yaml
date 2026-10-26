@@ -1,0 +1,8 @@
+# Stripe 68e7b8218 defaults read_timeout and write_timeout to 5m. Those are
+# total deadlines on the client connection. They cover a streaming HTTP
+# response and a CONNECT tunnel, and they are not extended while bytes
+# flow. A zero value in this file keeps that default. CVAT streams imports
+# through this proxy with no total cap of its own, so the deadlines are 24h.
+# read_header_timeout stays at the 5m default. There is no CLI flag for these.
+read_timeout: 24h
+write_timeout: 24h

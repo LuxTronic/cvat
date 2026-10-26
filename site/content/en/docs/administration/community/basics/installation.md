@@ -424,6 +424,12 @@ export SMOKESCREEN_OPTS=--allow-address=<storage_endpoint_ip>
 docker compose up -d
 ```
 
+The image starts Smokescreen with `--allow-self-connections`. An address
+passed to `--allow-address` is still allowed when it is assigned to the
+proxy host. Every other private address stays blocked until you allow it.
+Reads and writes through the proxy can run for 24 hours. The proxy listens
+on `127.0.0.1:4750`.
+
 When you use the standard `docker-compose.yml`, this variable is passed to
 all backend containers through the shared backend environment. If you use
 custom Docker Compose files or overrides, make sure the same

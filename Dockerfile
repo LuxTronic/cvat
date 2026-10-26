@@ -83,8 +83,9 @@ RUN --mount=type=cache,target=/root/.cache/pip/http-v2 \
 
 # Go 1.27.2 fixes the stdlib findings. eb1ac09 (2024-04-23) still pins
 # golang.org/x/net v0.17.0, golang.org/x/text v0.13.0, and logrus v1.9.0.
-# 68e7b8218e (2026-10-22) is past those module fixes. The process is still
-# started as `smokescreen --listen-ip=127.0.0.1`, and the default port is 4750.
+# 68e7b8218e (2026-10-22) is past those module fixes. supervisord starts the
+# binary on 127.0.0.1:4750 with --allow-self-connections. Transfer deadlines
+# are set in supervisord/reusable/smokescreen.yaml.
 FROM golang:1.27.2 AS build-smokescreen
 
 RUN git clone --filter=blob:none --no-checkout https://github.com/stripe/smokescreen.git
