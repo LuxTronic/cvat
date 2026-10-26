@@ -170,17 +170,18 @@ connect with an error similar to:
 Failed to connect to proxy URL: "http://localhost:4750"
 ```
 
-Allow the specific trusted storage IP address in `values.override.yaml`:
+Allow the storage address and port in `values.override.yaml`:
 
 ```yaml
 smokescreen:
-  opts: '--allow-address=<storage_endpoint_ip>'
+  opts: '--allow-address=<storage_endpoint_ip>:<port>'
 ```
 
-The image starts Smokescreen with `--allow-self-connections`. An address
-passed here is still allowed when it is assigned to the proxy host. Every
-other private address stays blocked until you allow it. Reads and writes
-through the proxy can run for 24 hours. The proxy listens on `127.0.0.1:4750`.
+The image starts Smokescreen with `--allow-self-connections`. The port in
+this rule is allowed even when that address is assigned to the proxy host.
+An address without a port allows every port on that host. Every other
+private address stays blocked until you allow it. Reads and writes through
+the proxy can run for 24 hours. The proxy listens on `127.0.0.1:4750`.
 
 This value is applied to CVAT backend pods through the shared backend
 environment. If you use custom manifests, make sure the same Smokescreen

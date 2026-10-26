@@ -417,18 +417,18 @@ connect with an error similar to:
 Failed to connect to proxy URL: "http://localhost:4750"
 ```
 
-Allow the specific trusted storage IP address with `SMOKESCREEN_OPTS`:
+Allow the storage address and port with `SMOKESCREEN_OPTS`:
 
 ```shell
-export SMOKESCREEN_OPTS=--allow-address=<storage_endpoint_ip>
+export SMOKESCREEN_OPTS=--allow-address=<storage_endpoint_ip>:<port>
 docker compose up -d
 ```
 
-The image starts Smokescreen with `--allow-self-connections`. An address
-passed to `--allow-address` is still allowed when it is assigned to the
-proxy host. Every other private address stays blocked until you allow it.
-Reads and writes through the proxy can run for 24 hours. The proxy listens
-on `127.0.0.1:4750`.
+The image starts Smokescreen with `--allow-self-connections`. The port in
+`--allow-address` is allowed even when that address is assigned to the proxy
+host. An address without a port allows every port on that host. Every other
+private address stays blocked until you allow it. Reads and writes through
+the proxy can run for 24 hours. The proxy listens on `127.0.0.1:4750`.
 
 When you use the standard `docker-compose.yml`, this variable is passed to
 all backend containers through the shared backend environment. If you use
