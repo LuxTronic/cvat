@@ -81,10 +81,15 @@ RUN --mount=type=cache,target=/root/.cache/pip/http-v2 \
     -r /tmp/cvat/requirements/${CVAT_CONFIGURATION}.txt \
     -w /tmp/wheelhouse
 
-FROM golang:1.27.1 AS build-smokescreen
+# Go 1.27.2 fixes the stdlib findings. eb1ac09 (2024-04-23) still pins
+# golang.org/x/net v0.17.0, golang.org/x/text v0.13.0, and logrus v1.9.0.
+# 68e7b8218e (2026-10-22) is past those module fixes. supervisord starts the
+# binary on 127.0.0.1:4750 with --allow-self-connections. Transfer deadlines
+# are set in supervisord/reusable/smokescreen.yaml.
+FROM golang:1.27.2 AS build-smokescreen
 
 RUN git clone --filter=blob:none --no-checkout https://github.com/stripe/smokescreen.git
-RUN cd smokescreen && git checkout eb1ac09 && go build -o /tmp/smokescreen
+RUN cd smokescreen && git checkout 68e7b8218e226bc47d09ce705fdb8fed82145ceb && go build -o /tmp/smokescreen
 
 FROM ${BASE_IMAGE}
 
@@ -110,6 +115,8 @@ ENV DJANGO_SETTINGS_MODULE="cvat.settings.${CVAT_CONFIGURATION}"
 # Install necessary apt packages.
 # USN-8950-1 ships the fix as libpoppler134 24.02.0-1ubuntu9.11.
 # The upstream version stays 24.02.0, so the Debian revision is the check.
+# USN-8954-1 ships zlib1g 1:1.3.dfsg-3.1ubuntu2.3. The package is named here
+# so apt upgrades the copy inherited from the Ubuntu base image.
 RUN apt-get -o Acquire::Retries=5 update && \
     DEBIAN_FRONTEND=noninteractive apt-get --no-install-recommends install -yq \
         adduser \
@@ -132,7 +139,9 @@ RUN apt-get -o Acquire::Retries=5 update && \
         tzdata \
         unrar \
         wait-for-it \
+        zlib1g \
     && dpkg --compare-versions "$(dpkg-query -W -f='${Version}' libpoppler134)" ge "24.02.0-1ubuntu9.11" \
+    && dpkg --compare-versions "$(dpkg-query -W -f='${Version}' zlib1g)" ge "1:1.3.dfsg-3.1ubuntu2.3" \
     && ln -fs /usr/share/zoneinfo/${TZ} /etc/localtime && \
     dpkg-reconfigure -f noninteractive tzdata && \
     rm -rf /var/lib/apt/lists/*
