@@ -49,6 +49,20 @@ class UpgradeContractTest(unittest.TestCase):
         self.assertIn("chown 1000:1000 /models", dockerfile)
         self.assertNotIn("chown -R 1000:1000 /yolov7", dockerfile)
 
+    def test_image_takes_security_updates_and_drops_ubuntu_pip(self):
+        dockerfile = (ROOT / "Dockerfile").read_text()
+        self.assertIn("apt-get upgrade -y", dockerfile)
+        for check in (
+            'libpcre2-8-0)" ge "10.42-4ubuntu2.2"',
+            'libx11-6)" ge "2:1.8.7-1ubuntu0.1"',
+            'zlib1g)" ge "1:1.3.dfsg-3.1ubuntu2.3"',
+        ):
+            self.assertIn(check, dockerfile)
+        self.assertIn(
+            "apt-get purge -y python3.12-venv python3-pip-whl python3-setuptools-whl",
+            dockerfile,
+        )
+
     def test_compose_keeps_host_ipc_without_nvidia_runtime(self):
         compose = (ROOT.parent / "docker-compose.yml").read_text()
         start = compose.index("  yolov7:\n")

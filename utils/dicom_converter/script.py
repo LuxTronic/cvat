@@ -11,7 +11,7 @@ from glob import glob
 import numpy as np
 from PIL import Image
 from pydicom import dcmread
-from pydicom.pixel_data_handlers.util import convert_color_space
+from pydicom.pixels import convert_color_space
 from tqdm import tqdm
 
 # Script configuration
@@ -35,6 +35,9 @@ args = parser.parse_args()
 class Converter:
     def __init__(self, filename):
         with dcmread(filename) as ds:
+            # pydicom 3 converts YBR_FULL and YBR_FULL_422 to RGB inside pixel_array.
+            # Keep the raw values, as pydicom 2 returned them; __iter__ converts once.
+            ds.pixel_array_options(as_rgb=False)
             self._pixel_array = ds.pixel_array
             self._photometric_interpretation = ds.PhotometricInterpretation
             self._min_value = ds.pixel_array.min()
@@ -65,10 +68,18 @@ class Converter:
             pixel_array = pixel_array.astype(int) * (2**self._depth - 1)
             pixel_array = pixel_array // (self._max_value - self._min_value)
 
-            # In some cases we need to convert colors additionally
+            # In some cases we need to convert colors additionally. pydicom converts
+            # only 8-bit YBR data; after the normalization above it is 0..255. pydicom 2
+            # turned 16-bit YBR into wrong colors without an error, so refuse it here.
             if "YBR" in self._photometric_interpretation:
+                if self._depth != 8:
+                    raise Exception(
+                        "YBR color conversion supports 8-bit data only, got {}".format(self._depth)
+                    )
                 pixel_array = convert_color_space(
-                    pixel_array, self._photometric_interpretation, "RGB"
+                    pixel_array.astype(np.uint8),
+                    self._photometric_interpretation,
+                    "RGB",
                 )
 
             if self._depth == 8:
