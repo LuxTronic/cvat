@@ -83,18 +83,18 @@ RUN --mount=type=cache,target=/root/.cache/pip/http-v2 \
 
 # Go 1.27.3 fixes the stdlib findings (CVE-2026-111943). Stripe's 68e7b8218e
 # (2026-10-22) still requires golang.org/x/net v0.59.0, so the build raises it to
-# v0.60.0, the first release with the fix for CVE-2026-78663 and four other x/net
-# advisories, re-vendors (smokescreen builds from vendor/), and fails if the binary
-# records any other x/net version.
+# v0.62.0 (CVE-2026-78663 and four other advisories fixed in v0.60.0;
+# CVE-2026-78661 and CVE-2026-97045 in v0.62.0), re-vendors (smokescreen builds
+# from vendor/), and fails if the binary records any other x/net version.
 # supervisord starts the binary on 127.0.0.1:4750 with --allow-self-connections.
 # Transfer deadlines are set in supervisord/reusable/smokescreen.yaml.
 FROM golang:1.27.3 AS build-smokescreen
 
 RUN git clone --filter=blob:none --no-checkout https://github.com/stripe/smokescreen.git
 RUN cd smokescreen && git checkout 68e7b8218e226bc47d09ce705fdb8fed82145ceb \
-    && go get golang.org/x/net@v0.60.0 && go mod tidy && go mod vendor \
+    && go get golang.org/x/net@v0.62.0 && go mod tidy && go mod vendor \
     && go build -o /tmp/smokescreen \
-    && go version -m /tmp/smokescreen | grep -E '^\s+dep\s+golang.org/x/net\s+v0.60.0(\s|$)'
+    && go version -m /tmp/smokescreen | grep -E '^\s+dep\s+golang.org/x/net\s+v0.62.0(\s|$)'
 
 FROM ${BASE_IMAGE}
 

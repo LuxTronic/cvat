@@ -1,7 +1,7 @@
 ### Security
 
 - \[Lux\] The server image builds smokescreen with Go 1.27.3 and
-  golang.org/x/net 0.60.0, takes Ubuntu's pending security updates
+  golang.org/x/net 0.62.0, takes Ubuntu's pending security updates
   (libpcre2-8-0 10.42-4ubuntu2.2), and moves to django-allauth 65.19.7 with
   oauthlib 4.0.1, pyasn1 0.6.5, and idna 3.20. Ubuntu's venv and pip wheel
   packages, whose fixes ship only in Ubuntu Pro, leave the final image, as do
