@@ -7,6 +7,9 @@
   packages, whose fixes ship only in Ubuntu Pro, leave the final image, as do
   the requirement locks, which scanners read as installed packages. The DICOM
   converter moves to pydicom 3.0.2.
+- \[Lux\] The server image no longer installs 7zip, whose CVE-2023-52168 and
+  CVE-2023-52169 fixes ship only in Ubuntu Pro. Zip, tar, and rar uploads still
+  extract; `.7z` archives are refused.
 - \[Lux\] The YOLOv7 sidecar takes Ubuntu's pending security updates (pcre2,
   libx11, zlib) and drops Ubuntu's venv and pip wheel packages once its
   virtualenv is built. The UI image upgrades its Alpine packages, which moves
