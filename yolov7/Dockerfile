@@ -16,7 +16,13 @@ ENV DEBIAN_FRONTEND=noninteractive \
 # Apt package versions stay unpinned. Ubuntu drops superseded versions from
 # the archive, so a pin here fails the next security rebuild. Hadolint
 # reports that choice as DL3008, which is below the error threshold.
+# apt-get upgrade takes the security revisions the pinned base is behind on;
+# the version checks fail the build if a stale mirror or cache serves an older
+# one. python3.12-venv only builds /opt/venv. Its pip and setuptools wheels
+# carry fixes only in Ubuntu Pro (CVE-2024-35195, CVE-2025-66418,
+# CVE-2025-66471), so those packages leave once the venv has PyPI's pip.
 RUN apt-get update \
+    && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends \
         python3.12 \
         python3.12-venv \
@@ -24,9 +30,16 @@ RUN apt-get update \
         libglib2.0-0 \
         libgl1 \
         libgomp1 \
+    && dpkg --compare-versions "$(dpkg-query -W -f='${Version}' libpcre2-8-0)" ge "10.42-4ubuntu2.2" \
+    && dpkg --compare-versions "$(dpkg-query -W -f='${Version}' libx11-6)" ge "2:1.8.7-1ubuntu0.1" \
+    && dpkg --compare-versions "$(dpkg-query -W -f='${Version}' zlib1g)" ge "1:1.3.dfsg-3.1ubuntu2.3" \
     && rm -rf /var/lib/apt/lists/* \
     && python3.12 -m venv /opt/venv \
-    && pip install --no-cache-dir "pip==26.2.1"
+    && pip install --no-cache-dir "pip==26.2.1" \
+    && apt-get purge -y python3.12-venv python3-pip-whl python3-setuptools-whl \
+    && if dpkg-query -W -f='${db:Status-Abbrev}\n' python3.12-venv python3-pip-whl python3-setuptools-whl 2>/dev/null | grep -q '^ii'; then \
+        echo "Ubuntu's venv or pip wheel packages are still installed" >&2; exit 1; \
+    fi
 
 WORKDIR /yolov7
 

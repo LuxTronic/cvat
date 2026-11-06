@@ -81,15 +81,20 @@ RUN --mount=type=cache,target=/root/.cache/pip/http-v2 \
     -r /tmp/cvat/requirements/${CVAT_CONFIGURATION}.txt \
     -w /tmp/wheelhouse
 
-# Go 1.27.2 fixes the stdlib findings. eb1ac09 (2024-04-23) still pins
-# golang.org/x/net v0.17.0, golang.org/x/text v0.13.0, and logrus v1.9.0.
-# 68e7b8218e (2026-10-22) is past those module fixes. supervisord starts the
-# binary on 127.0.0.1:4750 with --allow-self-connections. Transfer deadlines
-# are set in supervisord/reusable/smokescreen.yaml.
-FROM golang:1.27.2 AS build-smokescreen
+# Go 1.27.3 fixes the stdlib findings (CVE-2026-111943). Stripe's 68e7b8218e
+# (2026-10-22) still requires golang.org/x/net v0.59.0, so the build raises it to
+# v0.62.0 (CVE-2026-78663 and four other advisories fixed in v0.60.0;
+# CVE-2026-78661 and CVE-2026-97045 in v0.62.0), re-vendors (smokescreen builds
+# from vendor/), and fails if the binary records any other x/net version.
+# supervisord starts the binary on 127.0.0.1:4750 with --allow-self-connections.
+# Transfer deadlines are set in supervisord/reusable/smokescreen.yaml.
+FROM golang:1.27.3 AS build-smokescreen
 
 RUN git clone --filter=blob:none --no-checkout https://github.com/stripe/smokescreen.git
-RUN cd smokescreen && git checkout 68e7b8218e226bc47d09ce705fdb8fed82145ceb && go build -o /tmp/smokescreen
+RUN cd smokescreen && git checkout 68e7b8218e226bc47d09ce705fdb8fed82145ceb \
+    && go get golang.org/x/net@v0.62.0 && go mod tidy && go mod vendor \
+    && go build -o /tmp/smokescreen \
+    && go version -m /tmp/smokescreen | grep -E '^\s+dep\s+golang.org/x/net\s+v0.62.0(\s|$)'
 
 FROM ${BASE_IMAGE}
 
@@ -117,7 +122,14 @@ ENV DJANGO_SETTINGS_MODULE="cvat.settings.${CVAT_CONFIGURATION}"
 # The upstream version stays 24.02.0, so the Debian revision is the check.
 # USN-8954-1 ships zlib1g 1:1.3.dfsg-3.1ubuntu2.3. The package is named here
 # so apt upgrades the copy inherited from the Ubuntu base image.
+# apt-get upgrade takes every other security revision the base image is behind on,
+# such as libpcre2-8-0 10.42-4ubuntu2.2; the checks below fail the build if a
+# stale mirror or cache still serves an older one.
+# 7zip is not installed: Ubuntu 24.04's 7zip 23.01 fixes CVE-2023-52168 and
+# CVE-2023-52169 only in Ubuntu Pro. patool still extracts zip and tar archives
+# with Python's own modules and rar archives with unrar; .7z uploads are refused.
 RUN apt-get -o Acquire::Retries=5 update && \
+    DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=5 -yq upgrade && \
     DEBIAN_FRONTEND=noninteractive apt-get --no-install-recommends install -yq \
         adduser \
         bzip2 \
@@ -131,7 +143,6 @@ RUN apt-get -o Acquire::Retries=5 update && \
         libpython3.12t64 \
         libsasl2-2 \
         nginx \
-        p7zip-full \
         poppler-utils \
         python3 \
         python3-venv \
@@ -142,6 +153,10 @@ RUN apt-get -o Acquire::Retries=5 update && \
         zlib1g \
     && dpkg --compare-versions "$(dpkg-query -W -f='${Version}' libpoppler134)" ge "24.02.0-1ubuntu9.11" \
     && dpkg --compare-versions "$(dpkg-query -W -f='${Version}' zlib1g)" ge "1:1.3.dfsg-3.1ubuntu2.3" \
+    && dpkg --compare-versions "$(dpkg-query -W -f='${Version}' libpcre2-8-0)" ge "10.42-4ubuntu2.2" \
+    && if dpkg-query -W -f='${db:Status-Abbrev}\n' 7zip p7zip-full 2>/dev/null | grep -q '^ii'; then \
+        echo "7zip must not be installed" >&2; exit 1; \
+    fi \
     && ln -fs /usr/share/zoneinfo/${TZ} /etc/localtime && \
     dpkg-reconfigure -f noninteractive tzdata && \
     rm -rf /var/lib/apt/lists/*
@@ -191,6 +206,15 @@ RUN if [ "${CVAT_DEBUG_ENABLED}" = 'yes' ]; then \
 # and it was decided to remove pip from the final image
 RUN python -m pip uninstall -y pip
 
+# python3-venv only builds /opt/venv. It pulls in Ubuntu's pip and setuptools
+# wheels, whose fixes for the vendored urllib3 and requests (CVE-2024-35195,
+# CVE-2025-66418, CVE-2025-66471) ship only in Ubuntu Pro. Nothing creates a
+# virtualenv at runtime, so those packages leave the final image too.
+RUN apt-get purge -y python3-venv python3.12-venv python3-pip-whl python3-setuptools-whl \
+    && if dpkg-query -W -f='${db:Status-Abbrev}\n' python3-venv python3.12-venv python3-pip-whl python3-setuptools-whl 2>/dev/null | grep -q '^ii'; then \
+        echo "Ubuntu's venv or pip wheel packages are still installed" >&2; exit 1; \
+    fi
+
 # Install and initialize CVAT, copy all necessary files
 COPY cvat/nginx.conf /etc/nginx/nginx.conf
 COPY --parents \
@@ -201,6 +225,12 @@ COPY --parents \
     rqscheduler.py \
     wait_for_deps.sh \
     /opt/cvat/
+
+# The pip-compile-multi sources and locks are build inputs, already installed into
+# /opt/venv above. Left in the image, scanners read testing.txt as installed
+# packages (lupa, CVE-2026-34444, which has no fix) although only the production
+# set is installed.
+RUN rm -rf /opt/cvat/cvat/requirements
 
 RUN python -m compileall -q /opt/cvat
 
